@@ -8,6 +8,12 @@ internal static class ArchiveCommand
         try
         {
             bool move=args.Contains("--move-validated-to-trash",StringComparer.Ordinal);
+            bool reconcilePending=args.Contains("--reconcile-pending",StringComparer.Ordinal);
+            if(reconcilePending)
+            {
+                if(args[0]!="archive-workflow-run")throw new ArgumentException("Reconciliação por lotes é válida apenas no fluxo de arquivamento.");
+                args=args.Where(x=>x!="--reconcile-pending").ToArray();
+            }
             bool keep=args.Contains("--keep-originals",StringComparer.Ordinal);
             if(move||keep)
             {
@@ -63,7 +69,7 @@ internal static class ArchiveCommand
             if(args[0]=="archive-workflow-run" && args.Length==3)
             {
                 using var workflowBackend=new OutlookArchiveBackend();using var workflowEngine=new ArchiveEngine(args[1],workflowBackend);
-                return workflowEngine.ContinueWorkflow(args[2],autoMove??workflowEngine.AutomaticMovementEnabled(args[2]),allowRetainedBackup);
+                return workflowEngine.ContinueWorkflow(args[2],autoMove??workflowEngine.AutomaticMovementEnabled(args[2]),allowRetainedBackup,reconcilePending:reconcilePending);
             }
             if (args[0] == "archive-ndr-audit-pilot" && args.Length == 2)
             { DeliveryReportPilotAudit.Run(args[1]); return 0; }

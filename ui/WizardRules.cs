@@ -1,5 +1,7 @@
 namespace OutlookArchive.UI;
 
+internal enum ContinueAction { None, Archive, Reconcile, Remove }
+
 internal static class WizardRules
 {
     private static bool Has(IReadOnlyDictionary<string,int> states,params string[] names)=>names.Any(x=>states.GetValueOrDefault(x)>0);
@@ -9,6 +11,8 @@ internal static class WizardRules
     internal static bool CanRemove(IReadOnlyDictionary<string,int> s)=>Has(s,"Verified","InDeletedItems","DeleteStarted","PurgeStarted");
     internal static bool CanContinue(IReadOnlyDictionary<string,int> s)=>CanCopy(s)||CanVerify(s)||CanReconcile(s)||CanRemove(s);
     internal static bool CanProcess(IReadOnlyDictionary<string,int> s,bool move)=>CanCopy(s)||CanVerify(s,move);
+    internal static ContinueAction NextAction(IReadOnlyDictionary<string,int> s,bool move)=>
+        CanProcess(s,move)?ContinueAction.Archive:Has(s,"ReviewRequired")?ContinueAction.Reconcile:CanRemove(s)?ContinueAction.Remove:CanReconcile(s)?ContinueAction.Reconcile:ContinueAction.None;
     internal static string ValidateNewPst(string input)
     {
         if(string.IsNullOrWhiteSpace(input)||!Path.IsPathFullyQualified(input)||!string.Equals(Path.GetExtension(input),".pst",StringComparison.OrdinalIgnoreCase))

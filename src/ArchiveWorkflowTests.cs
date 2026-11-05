@@ -31,6 +31,14 @@ internal static class ArchiveWorkflowTests
                 Check(engine.ContinueWorkflow(job,true)==3,"Divergência não foi separada.");
                 Check(backend.Sources.Count(x=>x.Folder=="trash")==204 && backend.Sources[0].Folder=="folder","Revisão bloqueou lotes posteriores ou removeu divergência.");
                 int reads=backend.SourceSnapshotCalls;engine.ContinueWorkflow(job,true);Check(reads==backend.SourceSnapshotCalls,"Revisão foi repetida sem solicitação.");
+                Check(engine.ContinueWorkflow(job,true,reconcilePending:true)==3,"Reconciliação aceitou divergência ainda presente.");
+                Check(backend.Sources[0].Folder=="folder" && backend.Copies.Count==205,"Reconciliação alterou origem divergente ou duplicou cópias.");
+                // Advanced actions or interrupted status writes can leave an
+                // outdated checkpoint. Actual item states must drive Continue.
+                using(var repairLedger=new ArchiveLedger(Path.Combine(root,"archive.sqlite")))repairLedger.SetWorkflowState(job,1,"Complete");
+                backend.Sources[0].Fields["Subject"]=original.Fields["Subject"];backend.Save();
+                Check(engine.ContinueWorkflow(job,true,reconcilePending:true)==0,"Continuar não reconciliou e concluiu a pendência recuperada.");
+                Check(backend.Sources.All(x=>x.Folder=="trash") && backend.Copies.Count==205,"Recuperação não moveu somente os originais validados.");
             }
             else
             {

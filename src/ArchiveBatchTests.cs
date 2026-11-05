@@ -13,6 +13,7 @@ internal static class ArchiveBatchTests
         {
             ("complete-and-verify", CompleteAndVerify),
             ("repair-history", LaterRepairPreservesCompletedBatch),
+            ("scoped-reconciliation", ScopedReconciliation),
             ("identical-content-multiplicity", IdenticalContentMultiplicity),
             ("resume-native-copy", path => ResumeEffect(path, Effect.Copy)),
             ("resume-token-save", path => ResumeEffect(path, Effect.Mark)),
@@ -60,6 +61,20 @@ internal static class ArchiveBatchTests
         TargetVolumeBytes = target, HardLimitBytes = 256 * ArchiveVolumePolicy.MiB, ReserveBytes = ArchiveVolumePolicy.MiB
     };
     private static BatchFake Provider(string root) => new(Path.Combine(root, "provider.json"));
+    private static void ScopedReconciliation(string root)
+    {
+        using var backend=Provider(root);using var engine=new ArchiveEngine(root,backend);
+        string job=engine.Plan(Config(root));backend.CopyOutcome=Outcome.Extra;engine.Copy(job);
+        var keys=engine.Items(job).Select(x=>x.Key).ToHashSet(StringComparer.Ordinal);
+        int Version(){using var ledger=new ArchiveLedger(Path.Combine(root,"archive.sqlite"),true);return ledger.GetBatches(job).Single().Version;}
+        int before=Version(),copies=backend.Inner.Copies.Count,calls=backend.NativeCalls;
+        engine.Reconcile(job,new HashSet<string>{keys.First()});
+        Check(Version()==before,"Reconciliação parcial alterou um lote nativo fora do escopo completo.");
+        engine.Reconcile(job,keys);
+        Check(Version()>before,"Reconciliação por lote não revisitou o resultado nativo pendente.");
+        Check(backend.NativeCalls==calls && backend.Inner.Copies.Count==copies,"Reconciliação repetiu a transferência nativa.");
+        SourcesIntact(backend);
+    }
     private static void Check(bool condition, string message)
     { if (!condition) throw new Exception("Lotes: " + message); }
     private static List<ArchiveItem> ReadItems(string root, string job)

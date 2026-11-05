@@ -361,6 +361,7 @@ internal sealed partial class MainForm : Form
                 arguments=[..arguments,"--allow-retained-msg-backup"];
             if(command is "archive-run" or "archive-verify" or "archive-workflow-run")
                 arguments=[..arguments,autoMoveCurrent.Checked ? "--move-validated-to-trash" : "--keep-originals"];
+            if(command=="archive-workflow-run")arguments=[..arguments,"--reconcile-pending"];
             var result = await engine.RunAsync(arguments, AppendLog);
             if (result.WasInterrupted) throw new EngineInterruptedException();
             await WaitForStatusPoll(); await RefreshJobs(job.Id);
@@ -469,7 +470,7 @@ internal sealed partial class MainForm : Form
         pendingReport.Enabled = !busy && job;
         remove.Enabled = !busy && job && WizardRules.CanRemove(states);
         autoMoveNew.Enabled=autoMoveCurrent.Enabled=!busy;
-        continueArchive.Enabled=!busy && job && WizardRules.CanProcess(states,autoMoveCurrent.Checked);
+        continueArchive.Enabled=!busy && job && WizardRules.NextAction(states,autoMoveCurrent.Checked)!=ContinueAction.None;
         pauseAfterBatch.Enabled=busy && workflowRunning && engine.IsRunning && !batchPauseRequested;
         stop.Enabled = busy && engine.IsRunning;
         UpdateWizardActions();

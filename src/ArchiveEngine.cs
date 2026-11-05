@@ -287,7 +287,7 @@ internal sealed partial class ArchiveEngine : IDisposable
         var job = ledger.GetJob(jobId); Envelope(job);
         if (backend is IArchiveBatchBackend native)
         {
-            foreach (var batch in ledger.GetBatches(jobId).Where(x => selectedKeys is null && x.State == ArchiveBatchState.ReviewRequired && x.FolderId is not null))
+            foreach (var batch in ledger.GetBatches(jobId).Where(x => x.State == ArchiveBatchState.ReviewRequired && x.FolderId is not null && (selectedKeys is null || x.Items.All(selectedKeys.Contains))))
             {
                 // Explicit reconciliation may adopt an existing complete result,
                 // but never sends a CopyIntent to the native copier again.

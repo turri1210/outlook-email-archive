@@ -33,6 +33,8 @@ O plano inicial permanece congelado. O manifesto `jobs/<execução>/workflow/man
 
 Continuar arquivamento confere a conexão com o Outlook clássico, a presença dos PSTs, o acesso às pastas e a reserva de espaço. Depois processa somente os lotes abertos: copiar o que falta, validar as cópias e mover apenas os aprovados, quando autorizado. Lotes concluídos não têm seu conteúdo reaberto; consultas a índices e contagens continuam necessárias. Pendências ficam em lotes para revisão e não impedem o avanço nos demais.
 
+O botão também fica disponível quando só há itens para reconciliar ou remover. Ao acioná-lo, cada lote com pendências é reconciliado uma vez; os itens recuperados seguem para validação e movimento autorizado no mesmo fluxo. Divergências que persistirem continuam em Pendências, sem repetição automática. Os estados atuais das mensagens prevalecem sobre um checkpoint antigo do lote. Quando restar apenas remoção manual, Continuar abre a confirmação de remoção existente; a exclusão definitiva nunca é iniciada automaticamente.
+
 Pausar após este lote cria uma solicitação local que o motor reconhece depois de gravar o checkpoint do lote. Interromper continua disponível para parar imediatamente; nesse caso a retomada usa as intenções por mensagem do lote interrompido. Falhas que deixam itens sem processamento pausam o fluxo, sem repetição em ciclo. O usuário retoma após conferir o Outlook.
 
 A versão do catálogo passa a exigir o motor com suporte ao fluxo por lotes. Um backup anterior à conversão é preservado para diagnóstico; ele não deve substituir o catálogo após novas movimentações, pois isso descartaria checkpoints posteriores.

@@ -177,7 +177,14 @@ internal static class UiTests
             check(controls["Verificar pendentes"].Enabled==sample.Item3,"Disponibilidade da verificação: "+sample.Item1);
             check(controls["Reconciliar pendências"].Enabled==sample.Item4,"Disponibilidade da reconciliação: "+sample.Item1);
             check(controls["Remover originais…"].Enabled==sample.Item5,"Disponibilidade da remoção: "+sample.Item1);
+            check(controls["Continuar arquivamento"].Enabled==(sample.Item2||sample.Item3||sample.Item4||sample.Item5),"Continuar não acompanha as ações disponíveis: "+sample.Item1);
         }
+        check(WizardRules.NextAction(new Dictionary<string,int>{{"ReviewRequired",8321},{"InDeletedItems",1675}},true)==ContinueAction.Reconcile,"Pendências da execução real não encaminham à reconciliação.");
+        check(WizardRules.NextAction(new Dictionary<string,int>{{"Verified",3},{"ReviewRequired",2}},true)==ContinueAction.Archive,"Movimento autorizado de validados não priorizado.");
+        check(WizardRules.NextAction(new Dictionary<string,int>{{"Verified",3}},false)==ContinueAction.Remove,"Remoção manual não encaminha à confirmação.");
+        check(WizardRules.NextAction(new Dictionary<string,int>{{"InDeletedItems",5}},true)==ContinueAction.Remove,"Etapa posterior em Itens Excluídos não encaminha à confirmação.");
+        check(WizardRules.NextAction(new Dictionary<string,int>{{"PurgeStarted",1}},true)==ContinueAction.Remove,"Exclusão definitiva interrompida não exige nova confirmação.");
+        check(WizardRules.NextAction(new Dictionary<string,int>{{"Removed",5}},true)==ContinueAction.None,"Execução finalizada permite repetição.");
         string folder=Path.Combine(Path.GetTempPath(),"pst-destination-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(folder);
         string chosen=Path.Combine(folder,"novo.pst");check(WizardRules.ValidateNewPst(chosen)==chosen,"Novo destino local rejeitado.");File.WriteAllText(chosen,"fixture");
         try{WizardRules.ValidateNewPst(chosen);throw new Exception("PST existente aceito como novo.");}catch(ArgumentException){check(true,"Colisão rejeitada.");}

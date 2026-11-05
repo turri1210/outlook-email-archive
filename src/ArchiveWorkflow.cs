@@ -7,7 +7,7 @@ internal sealed partial class ArchiveEngine
     private Action? workflowProgress;
     private List<ArchiveItem> WorkItems(string job)=>workflowSelection is null?ledger.GetItems(job):ledger.WorkflowItems(job,workflowSelection);
 
-    internal int ContinueWorkflow(string jobId,bool move,bool allowRetainedBackup=false,Func<bool>? pauseRequested=null)
+    internal int ContinueWorkflow(string jobId,bool move,bool allowRetainedBackup=false,Func<bool>? pauseRequested=null,bool reconcilePending=false)
     {
         var job=ledger.GetJob(jobId);var config=Envelope(job).Config;
         WorkflowPlan.Ensure(ledger,job,move);
@@ -37,14 +37,30 @@ internal sealed partial class ArchiveEngine
         try
         {
             Report("Preparando a retomada dos lotes",true);
-            foreach(var batch in batches.Where(x=>x.State is not ("Complete" or "Review")))
+            foreach(var batch in batches)
             {
+                // Current item states can change through advanced actions after
+                // a batch checkpoint. Reopen only work explicitly requested.
+                var batchRows=ledger.WorkflowItems(jobId,batch.Items.ToHashSet(StringComparer.Ordinal));
+                bool hasWork=batchRows.Any(x=>WorkflowPlan.Actionable(x.State,move));
+                bool hasReview=reconcilePending && batchRows.Any(x=>x.State==ArchiveItemState.ReviewRequired);
+                if(!hasWork && !hasReview)continue;
                 if(pauseRequested?.Invoke()==true || File.Exists(request))
                 {ledger.SetWorkflowState(jobId,batch.Number,"Paused");Report("Pausado antes do próximo lote",true);return 4;}
                 current=batch.Number;workflowSelection=batch.Items.ToHashSet(StringComparer.Ordinal);
                 var rows=WorkItems(jobId);
+                if(hasReview || reconcilePending && rows.Any(x=>x.State is ArchiveItemState.ImportStarted or ArchiveItemState.DeleteStarted))
+                {
+                    ledger.SetWorkflowState(jobId,batch.Number,"Running");Report("Reconciliando as pendências do lote",true);
+                    Reconcile(jobId,workflowSelection);rows=WorkItems(jobId);
+                }
                 if(!rows.Any(x=>WorkflowPlan.Actionable(x.State,move)))
-                {ledger.SetWorkflowState(jobId,batch.Number,WorkflowPlan.Classify(rows,move));continue;}
+                {
+                    ledger.SetWorkflowState(jobId,batch.Number,WorkflowPlan.Classify(rows,move));
+                    Report("Reconciliação concluída; divergências preservadas para revisão",true);
+                    if(pauseRequested?.Invoke()==true || File.Exists(request))return 4;
+                    continue;
+                }
                 ledger.SetWorkflowState(jobId,batch.Number,"Running");Report("Copiando as mensagens do lote",true);
                 if(rows.Any(x=>x.State is ArchiveItemState.Planned or ArchiveItemState.Exported or ArchiveItemState.ImportStarted))Copy(jobId);
                 Report("Validando as cópias e concluindo o lote",true);

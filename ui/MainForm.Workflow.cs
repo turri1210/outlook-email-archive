@@ -30,7 +30,11 @@ internal sealed partial class MainForm
     {public override string ToString()=>Key.Length==0?"Todos os motivos":$"{Count:N0} · {Key}";}
     private async Task ContinueArchive()
     {
-        if(busy)return;workflowRunning=true;batchPauseRequested=false;
+        if(busy || displayedJob is not { } job)return;
+        var action=WizardRules.NextAction(job.States,autoMoveCurrent.Checked);
+        if(action==ContinueAction.None)return;
+        if(action==ContinueAction.Remove){await Remove();return;}
+        workflowRunning=true;batchPauseRequested=false;
         try{await Execute("archive-workflow-run","Conferindo o Outlook, os PSTs e os lotes pendentes…");}
         finally{workflowRunning=false;UpdateActions();}
     }
