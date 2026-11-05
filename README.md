@@ -53,6 +53,11 @@ Na primeira utilização de lotes, o catálogo passa a exigir esta versão ou ma
 
 ## Desenvolvimento e testes
 
+Para entregar uma nova versão em Downloads, execute `pwsh -File tools/Publish-Downloads.ps1`.
+Esse comando compila o motor e a interface, executa os testes da interface e atualiza
+o programa e `Downloads/emailArchive/Arquivo Outlook.zip` juntos. Feche a interface
+e aguarde o motor terminar antes de publicar. O ZIP não inclui dados dos backups.
+
 ```powershell
 dotnet build .\src\OutlookArchive.csproj -c Release
 dotnet build .\ui\OutlookArchive.UI.csproj -c Release
