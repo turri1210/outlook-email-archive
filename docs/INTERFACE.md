@@ -1,0 +1,42 @@
+# Interface por etapas
+
+A aplicação usa uma janela fixa, sem maximização, ajustada à área útil da tela. O fluxo é: início, origem, destino, opções, resumo e execução. O usuário pode voltar às escolhas antes de preparar o plano.
+
+- **Início:** cria a pasta `emailArchive` ao lado do executável e consulta somente esse catálogo. Permite começar ou continuar uma execução disponível. Não importa histórico de outras instalações.
+- **Origem:** carrega caixas e pastas do Outlook clássico e permite filtrar e selecionar a pasta inicial.
+- **Destino:** escolhe um PST existente ou a pasta e o nome de um novo arquivo. Nunca sobrescreve um PST novo com nome já ocupado. As partes adicionais permanecem na mesma pasta do PST inicial e incluem a identificação da execução no nome.
+- **Opções:** subpastas, corte inclusivo por data, autorização de validação com backup MSG, tamanho alvo de partes (20 GiB) e movimento automático de originais validados para Itens Excluídos.
+- **Resumo:** mostra as escolhas e oferece Preparar arquivamento. Preparar não inicia cópia nem remoção.
+- **Execução:** botão principal Continuar arquivamento, pausa ao concluir o lote, progresso numérico com velocidade e estimativa, abas Mensagens, Arquivos PST e Pendências, grupos de motivos e relatórios em `emailArchive/reports`. As operações manuais ficam em Ações avançadas.
+
+## Disponibilidade das ações
+
+| Ação | Estados com trabalho disponível |
+|---|---|
+| Continuar arquivamento | Planned, Exported, ImportStarted, Copied; Verified e DeleteStarted quando o movimento está autorizado |
+| Copiar / retomar (avançado) | Planned, Exported, ImportStarted |
+| Verificar pendentes (avançado) | Copied; Verified e DeleteStarted quando o movimento está autorizado |
+| Reconciliar pendências | ReviewRequired, ImportStarted, DeleteStarted, PurgeStarted |
+| Remover originais | Verified, InDeletedItems, DeleteStarted, PurgeStarted |
+
+Durante uma operação, as escolhas e demais ações ficam bloqueadas. Interromper fica disponível quando o motor está ativo. Acima da barra animada, que ocupa toda a largura do rodapé, aparece a atividade atual. Os registros completos de cada chamada do motor são gravados em `emailArchive/logs`, incluindo consultas e interrupções. Não existe painel de log na interface.
+
+O movimento automático é uma opção explícita no resumo e na execução. Quando ativado, Copiar / retomar segue para a validação; cada mensagem aprovada é movida para Itens Excluídos nessa mesma passagem. Verificar pendentes também trata originais já validados e ainda não movidos, após conferência atual. A gravação da intenção e da prova precede o movimento; a retomada reconhece mensagens já movidas. Não há exclusão definitiva nesse modo. A remoção definitiva permanece manual. Uma cópia sem validação não habilita remoção. Rascunhos, tipos não suportados e itens com divergências não são aprovados pelo redesenho da interface.
+
+## Distribuição
+
+Copie a pasta publicada inteira. Ela contém o executável da interface, suas dependências e a subpasta `engine`, com o motor, os três auxiliares nativos e os recursos de validação. O executável encontra o motor nessa subpasta sem depender do diretório do código-fonte. A instalação atual usa .NET 8 e o runtime Python configurado neste computador; as dependências Python da validação estão incluídas em `engine/semantic`.
+
+## Fluxo por lotes
+
+O plano inicial permanece congelado. O manifesto `jobs/<execução>/workflow/manifest.json` divide os itens em grupos de até 100, preservando inteiros os lotes nativos que já existiam. O banco registra os membros e o checkpoint de cada lote em transações duráveis.
+
+Continuar arquivamento confere a conexão com o Outlook clássico, a presença dos PSTs, o acesso às pastas e a reserva de espaço. Depois processa somente os lotes abertos: copiar o que falta, validar as cópias e mover apenas os aprovados, quando autorizado. Lotes concluídos não têm seu conteúdo reaberto; consultas a índices e contagens continuam necessárias. Pendências ficam em lotes para revisão e não impedem o avanço nos demais.
+
+Pausar após este lote cria uma solicitação local que o motor reconhece depois de gravar o checkpoint do lote. Interromper continua disponível para parar imediatamente; nesse caso a retomada usa as intenções por mensagem do lote interrompido. Falhas que deixam itens sem processamento pausam o fluxo, sem repetição em ciclo. O usuário retoma após conferir o Outlook.
+
+A versão do catálogo passa a exigir o motor com suporte ao fluxo por lotes. Um backup anterior à conversão é preservado para diagnóstico; ele não deve substituir o catálogo após novas movimentações, pois isso descartaria checkpoints posteriores.
+
+Na conversão, erros específicos de identificação nativa temporariamente indisponível podem voltar de revisão para Copiado quando as evidências completas já estão registradas. Isso não aprova nenhuma mensagem: uma nova validação completa continua obrigatória antes de qualquer movimento. Outras divergências permanecem em revisão.
+
+Ao terminar, o programa apresenta e salva o resumo das cópias, movimentações e pendências. A estimativa de duração é calculada com a velocidade da execução atual e pode variar conforme o tamanho e a complexidade das mensagens.

@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <NativeRuntimeRoot Condition="'$(NativeRuntimeRoot)' == ''">$(MSBuildProjectDirectory)/native/win-x64</NativeRuntimeRoot>
+  </PropertyGroup>
+  <ItemGroup>
+    <ArchiveNativeRuntime Include="$(NativeRuntimeRoot)/native-copy.exe;$(NativeRuntimeRoot)/native-identity.exe;$(NativeRuntimeRoot)/native-finalize.exe" />
+    <Content Include="@(ArchiveNativeRuntime)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" TargetPath="%(Filename)%(Extension)" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.22" />
+    <PackageReference Include="OpenMcdf" Version="3.3.0" />
+  </ItemGroup>
+  <Target Name="RequireArchiveNativeRuntime" BeforeTargets="PrepareForBuild" Condition="'$(DesignTimeBuild)' != 'true'">
+    <Error Condition="!Exists('%(ArchiveNativeRuntime.Identity)')" Text="Componente nativo obrigatório ausente: %(ArchiveNativeRuntime.Identity). Restaure os três executáveis nativos ou execute tools/native/build-runtime.ps1 antes de compilar." />
+  </Target>
+</Project>
