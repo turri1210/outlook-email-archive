@@ -25,7 +25,7 @@ internal sealed partial class MainForm
         shell.ColumnStyles.Add(new ColumnStyle(SizeType.Percent,100));
         shell.RowStyles.Add(new RowStyle(SizeType.AutoSize));shell.RowStyles.Add(new RowStyle(SizeType.Percent,100));
         shell.RowStyles.Add(new RowStyle(SizeType.AutoSize));shell.RowStyles.Add(new RowStyle(SizeType.AutoSize));shell.RowStyles.Add(new RowStyle(SizeType.Absolute,8));
-        var heading=NaturalTable(1,2);heading.Controls.Add(stepHeading,0,0);heading.Controls.Add(stepDescription,0,1);BoundLabel(stepDescription);
+        var heading=NaturalTable(1,2);heading.Dock=DockStyle.Top;heading.Controls.Add(stepHeading,0,0);heading.Controls.Add(stepDescription,0,1);BoundLabel(stepDescription);
         shell.Controls.Add(heading,0,0);shell.Controls.Add(pagesHost,0,1);
         for(int i=0;i<6;i++){var page=new Panel{Dock=DockStyle.Fill,Visible=false,Padding=new Padding(0,16,0,8)};pages.Add(page);pagesHost.Controls.Add(page);}
 

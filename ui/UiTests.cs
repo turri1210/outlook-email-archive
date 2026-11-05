@@ -213,6 +213,20 @@ internal static class UiTests
         check(paged.Rows.Count == 200, "Milhares de erros não foram paginados.");
         Descendants(form).OfType<Button>().Single(x => x.Text == "Próxima").PerformClick();
         check(paged.Rows[0].Cells[0].Value?.ToString() == 200.ToString("X64")[..12], "Navegação de pendências não abriu a próxima página.");
+        form.Size=new Size(960,760);
+        Descendants(form).OfType<CheckBox>().Single(x=>x.Text=="Ações avançadas").Checked=true;
+        bind.Invoke(form,[large]);Application.DoEvents();
+        var stableTabs=tabs.Bounds;
+        check(stableTabs.Height>=120,"Área de mensagens insuficiente antes de minimizar.");
+        for(int cycle=0;cycle<6;cycle++)
+        {
+            form.WindowState=FormWindowState.Minimized;Application.DoEvents();
+            // Status updates continue while the real worker is running.
+            bind.Invoke(form,[large]);Application.DoEvents();
+            form.WindowState=FormWindowState.Normal;Application.DoEvents();
+            check(tabs.Height>=120 && Math.Abs(tabs.Top-stableTabs.Top)<=2 && Math.Abs(tabs.Height-stableTabs.Height)<=2,
+                $"Restaurar a janela deslocou ou ocultou as abas: antes={stableTabs}; depois={tabs.Bounds}; ciclo={cycle}.");
+        }
         Console.WriteLine($"Histórico grande: 6.120 registros, cinco alternâncias em {watch.Elapsed.TotalMilliseconds:F0} ms.");
         // Dispose without FormClosing: test must not save user settings.
     }

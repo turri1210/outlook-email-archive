@@ -104,6 +104,8 @@ internal sealed partial class MainForm : Form
         void Limit()
         {
             if (flow.Parent is not { } parent) return;
+            // Iconic window dimensions must not become persistent wrapping limits.
+            if (parent.FindForm()?.WindowState==FormWindowState.Minimized || parent.ClientSize.Width<=0) return;
             var limit = new Size(Math.Max(100, parent.ClientSize.Width - flow.Margin.Horizontal), 0);
             if (flow.MaximumSize != limit) flow.MaximumSize = limit;
         }
@@ -129,6 +131,7 @@ internal sealed partial class MainForm : Form
         if (label.Parent is not { } parent) return;
         void Fit()
         {
+            if (parent.FindForm()?.WindowState==FormWindowState.Minimized || parent.ClientSize.Width<=0) return;
             var maximum = new Size(Math.Max(100, parent.ClientSize.Width - label.Margin.Horizontal), 0);
             if (label.MaximumSize != maximum) label.MaximumSize = maximum;
         }
