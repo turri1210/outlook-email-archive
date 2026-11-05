@@ -7,5 +7,9 @@
     <Nullable>enable</Nullable>
     <AssemblyName>OutlookArchive.UI</AssemblyName>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <ApplicationIcon>assets/email-archive.ico</ApplicationIcon>
   </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="assets/email-archive.ico" LogicalName="OutlookArchive.UI.ArchiveIcon" />
+  </ItemGroup>
 </Project>

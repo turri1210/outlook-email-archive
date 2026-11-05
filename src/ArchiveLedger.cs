@@ -40,6 +40,7 @@ internal sealed partial class ArchiveLedger : IDisposable
         InitializeWorkflow();
         InitializeHistoryStorage();
         InitializeEvidenceMaintenance();
+        InitializePlanning();
     }
     internal void InsertJob(ArchiveJob job)
     {

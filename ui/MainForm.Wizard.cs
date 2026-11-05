@@ -104,8 +104,8 @@ internal sealed partial class MainForm
     private void UpdateWizardActions()
     {
         if(pages.Count==0)return;
-        startNew.Enabled=!busy;resume.Enabled=!busy && jobs.Items.Cast<JobStatus>().Any(x=>WizardRules.CanContinue(x.States)) && jobs.SelectedItem is JobStatus selected && WizardRules.CanContinue(selected.States);
-        bool hasPending=jobs.Items.Cast<JobStatus>().Any(x=>WizardRules.CanContinue(x.States));
+        startNew.Enabled=!busy;resume.Enabled=!busy && jobs.SelectedItem is JobStatus selected && (selected.PlanningPending||WizardRules.CanContinue(selected.States));
+        bool hasPending=jobs.Items.Cast<JobStatus>().Any(x=>x.PlanningPending||WizardRules.CanContinue(x.States));
         resume.Visible=jobs.Visible=hasPending;
         resumeLabel.Text=hasPending ? "Execuções registradas nesta instalação:" : "Nenhum backup pendente nesta instalação.";
         back.Visible=currentStep is >=1 and <=4;back.Enabled=!busy;

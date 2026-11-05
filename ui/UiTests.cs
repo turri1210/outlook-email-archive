@@ -185,6 +185,10 @@ internal static class UiTests
         check(WizardRules.NextAction(new Dictionary<string,int>{{"InDeletedItems",5}},true)==ContinueAction.Remove,"Etapa posterior em Itens Excluídos não encaminha à confirmação.");
         check(WizardRules.NextAction(new Dictionary<string,int>{{"PurgeStarted",1}},true)==ContinueAction.Remove,"Exclusão definitiva interrompida não exige nova confirmação.");
         check(WizardRules.NextAction(new Dictionary<string,int>{{"Removed",5}},true)==ContinueAction.None,"Execução finalizada permite repetição.");
+        var pendingPlan=new JobStatus{Id=Guid.NewGuid().ToString("N"),PlanningPending=true,PlanningAnalyzed=3,PlanningTotal=5,States=new(){{"Planned",3}}};
+        history.Items.Add(pendingPlan);history.SelectedItem=pendingPlan;
+        check(controls["Continuar arquivamento"].Enabled && controls["Continuar backup"].Enabled,"Planejamento interrompido não permite retomada.");
+        check(!controls["Copiar / retomar"].Enabled && !controls["Remover originais…"].Enabled,"Plano incompleto permite operações de cópia ou remoção.");
         string folder=Path.Combine(Path.GetTempPath(),"pst-destination-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(folder);
         string chosen=Path.Combine(folder,"novo.pst");check(WizardRules.ValidateNewPst(chosen)==chosen,"Novo destino local rejeitado.");File.WriteAllText(chosen,"fixture");
         try{WizardRules.ValidateNewPst(chosen);throw new Exception("PST existente aceito como novo.");}catch(ArgumentException){check(true,"Colisão rejeitada.");}

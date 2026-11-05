@@ -22,22 +22,11 @@ internal sealed partial class ArchiveEngine : IDisposable
     {
         config.Validate();
         if (!string.Equals(Path.GetFullPath(config.RootDirectory), root, StringComparison.OrdinalIgnoreCase)) throw new ArgumentException("Raiz da configuração não corresponde ao catálogo aberto.");
-        var scope = backend.CaptureScope(config);
-        return CreatePlan(config, scope, scope);
+        return BeginPlanning(config);
     }
     private string CreatePlan(ArchiveConfig config, List<FolderScopeSnapshot> initialScope, IReadOnlyList<FolderScopeSnapshot> selectedScope)
     {
-        var descriptors = backend.DiscoverFrozen(config, selectedScope);
-        if (descriptors.Select(x => ArchiveLedger.ComputeItemKey(x.StoreId, x.EntryId)).Distinct(StringComparer.Ordinal).Count() != descriptors.Count)
-            throw new ArchiveReviewException("Descoberta contém identidades duplicadas; plano não criado.");
-        string id = Guid.NewGuid().ToString("N"), directory = Path.Combine(root, "jobs", id);
-        Directory.CreateDirectory(directory); Directory.CreateDirectory(Path.Combine(directory, "psts"));
-        string scopePath = Path.Combine(directory, "source-scope.json"); ArchiveFiles.WriteNew(scopePath, initialScope);
-        string plan = Path.Combine(directory, "source-plan.json"); ArchiveFiles.WriteNew(plan, descriptors);
-        var job = new ArchiveJob { Id = id, RootDirectory = directory,
-            ConfigJson = JsonSerializer.Serialize(new ArchivePlanEnvelope(config, ArchiveFiles.Sha(plan), ArchiveFiles.Sha(scopePath))) };
-        ledger.InsertJob(job);
-        SealPlan(job); Status(id); return id;
+        return BeginPlanning(config,initialScope,selectedScope);
     }
     private List<FolderScopeSnapshot> InitialScope(ArchiveJob job)
     {
@@ -90,8 +79,9 @@ internal sealed partial class ArchiveEngine : IDisposable
         var current = backend.CaptureScope(config);
         return CreatePlan(config, current, NewScope(previous, current));
     }
-    private ArchivePlanEnvelope Envelope(ArchiveJob job)
+    private ArchivePlanEnvelope Envelope(ArchiveJob job,bool allowPlanning=false)
     {
+        if(job.PlanningPending && !allowPlanning)throw new ArchiveReviewException("O planejamento está incompleto. Use Continuar arquivamento para concluir a preparação antes de copiar ou remover mensagens.");
         var envelope = JsonSerializer.Deserialize<ArchivePlanEnvelope>(job.ConfigJson) ?? throw new InvalidDataException("Configuração ausente.");
         envelope.Config.Validate();
         if (!string.Equals(Path.GetFullPath(envelope.Config.RootDirectory).TrimEnd(Path.DirectorySeparatorChar), root, StringComparison.OrdinalIgnoreCase) ||
@@ -101,7 +91,7 @@ internal sealed partial class ArchiveEngine : IDisposable
     }
     private void SealPlan(ArchiveJob job)
     {
-        var envelope = Envelope(job);
+        var envelope = Envelope(job,true);
         string path = Path.Combine(job.RootDirectory, "source-plan.json");
         if (ArchiveFiles.Sha(path) != envelope.PlanSha256) throw new ArchiveReviewException("Plano congelado foi alterado.");
         var rows = JsonSerializer.Deserialize<List<SourceDescriptor>>(File.ReadAllText(path)) ?? throw new InvalidDataException("Plano inválido.");

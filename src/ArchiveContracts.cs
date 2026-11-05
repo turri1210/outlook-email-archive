@@ -37,6 +37,10 @@ internal interface IArchiveBackend : IDisposable
     SourceLocation MoveToDeletedItems(ArchiveItem item, string? expectedChangeKey);
     void DeleteFromDeletedItems(ArchiveItem item, SourceLocation location, string? expectedChangeKey);
 }
+internal interface IArchiveResumableScopeBackend
+{
+    List<FolderScopeSnapshot> CaptureScope(ArchiveConfig config,IReadOnlyList<FolderScopeSnapshot> saved,Action<FolderScopeSnapshot> checkpoint);
+}
 internal sealed class ArchiveReviewException(string message) : Exception(message);
 internal sealed class ArchiveInjectedCrashException(string message) : Exception(message);
 

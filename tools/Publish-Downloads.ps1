@@ -22,6 +22,8 @@ New-Item -ItemType Directory -Path $payload,$ui,$engine -Force | Out-Null
 if($LASTEXITCODE -ne 0){throw 'Falha ao compilar o motor.'}
 & dotnet build (Join-Path $project 'ui/OutlookArchive.UI.csproj') -c Release -o $ui --nologo
 if($LASTEXITCODE -ne 0){throw 'Falha ao compilar a interface.'}
+& dotnet (Join-Path $engine 'OutlookArchive.dll') archive-planning-self-test > (Join-Path $stage 'planning-tests.log') 2>&1
+if($LASTEXITCODE -ne 0){throw ('Falha nos testes de retomada do planejamento. Consulte '+$stage)}
 $test=Start-Process -FilePath (Join-Path $ui 'OutlookArchive.UI.exe') -ArgumentList '--self-test' -WindowStyle Hidden -Wait -PassThru -RedirectStandardOutput (Join-Path $stage 'ui-tests.log') -RedirectStandardError (Join-Path $stage 'ui-tests-errors.log')
 if($test.ExitCode -ne 0){throw ('Falha nos testes da interface. Consulte '+$stage)}
 Get-ChildItem -LiteralPath $ui -File | Where-Object Extension -ne '.pdb' | Copy-Item -Destination $payload

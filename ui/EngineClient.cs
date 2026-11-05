@@ -118,6 +118,9 @@ internal sealed class SourceFolder
 internal sealed record SourceSelection(string StoreId, string FolderId, string Label);
 internal sealed class JobStatus
 {
+    public bool PlanningPending {get;set;}
+    public int PlanningAnalyzed {get;set;}
+    public int PlanningTotal {get;set;}
     public string Id { get; set; } = "";
     public DateTimeOffset CreatedUtc { get; set; }
     public string? SourceLabel { get; set; }
@@ -132,7 +135,7 @@ internal sealed class JobStatus
     public Dictionary<string, int> States { get; set; } = [];
     public List<VolumeStatus> Volumes { get; set; } = [];
     public List<JobError> Errors { get; set; } = [];
-    public override string ToString() => $"{CreatedUtc.ToLocalTime():dd/MM/yyyy HH:mm} · {SourceLabel??Id[..Math.Min(8,Id.Length)]} · {(CutoffDateInclusive is { } cutoff?$"até {cutoff:dd/MM/yyyy}":"todos os e-mails")} · {Id[..Math.Min(8,Id.Length)]}";
+    public override string ToString() => $"{CreatedUtc.ToLocalTime():dd/MM/yyyy HH:mm} · {SourceLabel??Id[..Math.Min(8,Id.Length)]} · {(PlanningPending?"planejamento interrompido":CutoffDateInclusive is { } cutoff?$"até {cutoff:dd/MM/yyyy}":"todos os e-mails")} · {Id[..Math.Min(8,Id.Length)]}";
 }
 internal sealed class JobError
 {

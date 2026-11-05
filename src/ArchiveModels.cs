@@ -2,6 +2,7 @@ internal enum ArchiveItemState { Planned, Exported, ImportStarted, Copied, Verif
 internal enum ArchiveVolumeState { CreateStarted, Ready, ReviewRequired }
 internal sealed class ArchiveJob
 {
+    public bool PlanningPending { get; set; }
     public string Id { get; set; } = "";
     public string RootDirectory { get; set; } = "";
     public string ConfigJson { get; set; } = "{}";

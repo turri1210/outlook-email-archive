@@ -29,6 +29,25 @@ Copie a pasta publicada inteira. Ela contém o executável da interface, suas de
 
 ## Fluxo por lotes
 
+### Retomar a preparação
+
+Ao iniciar um planejamento, a execução é registrada antes da leitura dos e-mails.
+As identidades de cada pasta capturada e o resultado da análise de cada mensagem
+são salvos no catálogo. Ao interromper e reabrir, escolha **Continuar backup** e
+depois **Continuar arquivamento** para concluir a preparação da mesma execução.
+Os itens já analisados não são relidos, e novas mensagens não entram nas pastas
+cujo escopo já foi capturado. A captura de uma pasta interrompida antes de seu
+checkpoint precisa ser refeita; as pastas já salvas são reaproveitadas.
+
+Até a conclusão do plano, cópia, validação, reconciliação e remoção permanecem
+bloqueadas. O término da preparação não inicia a cópia automaticamente. Uma pasta
+ou mensagem do escopo que tenha sido movida ou excluída pode exigir revisão;
+a retomada não a substitui por outra mensagem.
+
+O comando técnico de retomada é `archive-plan-resume <raiz> <execução>`.
+`archive-planning-self-test` exercita interrupções na captura, na análise e antes
+do registro final, usando apenas mensagens artificiais.
+
 O plano inicial permanece congelado. O manifesto `jobs/<execução>/workflow/manifest.json` divide os itens em grupos de até 100, preservando inteiros os lotes nativos que já existiam. O banco registra os membros e o checkpoint de cada lote em transações duráveis.
 
 Continuar arquivamento confere a conexão com o Outlook clássico, a presença dos PSTs, o acesso às pastas e a reserva de espaço. Depois processa somente os lotes abertos: copiar o que falta, validar as cópias e mover apenas os aprovados, quando autorizado. Lotes concluídos não têm seu conteúdo reaberto; consultas a índices e contagens continuam necessárias. Pendências ficam em lotes para revisão e não impedem o avanço nos demais.

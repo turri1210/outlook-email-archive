@@ -47,6 +47,7 @@ internal sealed partial class MainForm : Form
     private List<SourceStore> sourceData = [];
     private bool busy, refreshing, loadingJobs;
     private string? activeRoot;
+    private string? preparingJobId;
     internal MainForm(string? initialRoot = null, string? initialJob = null)
     {
         Text = "Arquivo de e-mails · Outlook clássico";
@@ -60,6 +61,8 @@ internal sealed partial class MainForm : Form
         activeRoot=root.Text;
         engine.LogDirectory=statusEngine.LogDirectory=Path.Combine(root.Text,"logs");
         BuildWizard();
+        using(var iconStream=typeof(MainForm).Assembly.GetManifestResourceStream("OutlookArchive.UI.ArchiveIcon"))
+        {if(iconStream is not null){using var appIcon=new Icon(iconStream);Icon=(Icon)appIcon.Clone();}}
         connect.Click+=async (_,_)=>await Guarded("Carregando pastas do Outlook…",LoadSources);
         browsePst.Click+=(_,_)=>BrowseExistingPst();
         destinationMode.SelectedIndexChanged+=(_,_)=>UpdateActions();
@@ -183,6 +186,7 @@ internal sealed partial class MainForm : Form
         if (InvokeRequired) { BeginInvoke((Action)(() => AppendLog(line))); return; }
         Directory.CreateDirectory(Path.Combine(root.Text,"logs"));
         File.AppendAllText(Path.Combine(root.Text,"logs","interface-"+DateTime.Today.ToString("yyyyMMdd")+".log"),DateTimeOffset.Now.ToString("O")+" "+line+Environment.NewLine);
+        if(line.StartsWith("PLANEJAMENTO=",StringComparison.Ordinal) && Guid.TryParseExact(line[13..].Trim(),"N",out var preparing))preparingJobId=preparing.ToString("N");
         if(line.StartsWith("FLUXO=",StringComparison.Ordinal))
         {try{if(JsonSerializer.Deserialize<WorkflowInfo>(line[6..],UiRules.Json) is { } data)ApplyWorkflowProgress(data,true);}catch(JsonException){}return;}
         if(workflowRunning)return;
@@ -200,14 +204,15 @@ internal sealed partial class MainForm : Form
             try
             {
                 await WaitForStatusPoll();
-                if (File.Exists(Path.Combine(root.Text, "archive.sqlite"))) await RefreshJobs();
+                if (File.Exists(Path.Combine(root.Text, "archive.sqlite")))await RefreshJobs(preparingJobId);
+                if(displayedJob?.PlanningPending==true)ShowStep(5);
             }
             catch (Exception ex) { AppendLog("Não foi possível atualizar o histórico após a interrupção: " + ex.Message); }
             activity.Text = "Operação interrompida por você. Registros já gravados foram preservados.";
-            AppendLog("Interrupção solicitada pelo usuário. Se o plano não chegou a ser registrado, prepare-o novamente; caso contrário, selecione a execução para retomar.");
+            AppendLog("Interrupção solicitada. Selecione a execução em Continuar backup; o planejamento retoma os checkpoints já gravados.");
         }
         catch (Exception ex) { string friendlyMessage=UiRules.ErrorMessage(ex.Message); activity.Text = friendlyMessage==ex.Message ? "Operação não concluída. Consulte a pasta de logs para detalhes." : "Abra o Outlook clássico e tente novamente."; AppendLog(ex.ToString()); MessageBox.Show(this, friendlyMessage, "Arquivamento", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
-        finally { timer.Stop(); busy = false; progress.Style = ProgressBarStyle.Continuous; progress.Value = 0; if(displayedJob?.Workflow is { } flow)ApplyWorkflowProgress(flow,false); UpdateActions(); }
+        finally { preparingJobId=null;timer.Stop(); busy = false; progress.Style = ProgressBarStyle.Continuous; progress.Value = 0; if(displayedJob?.Workflow is { } flow)ApplyWorkflowProgress(flow,false); UpdateActions(); }
     }
     private async Task LoadSources()
     {
@@ -284,7 +289,7 @@ internal sealed partial class MainForm : Form
         try
         {
             jobs.Items.Clear(); jobs.Items.AddRange(data.OrderByDescending(x => x.CreatedUtc).Cast<object>().ToArray());
-            if (jobs.Items.Count > 0) jobs.SelectedItem = jobs.Items.Cast<JobStatus>().FirstOrDefault(x => x.Id == current) ?? jobs.Items.Cast<JobStatus>().FirstOrDefault(x=>WizardRules.CanContinue(x.States)) ?? jobs.Items[0];
+            if (jobs.Items.Count > 0) jobs.SelectedItem = jobs.Items.Cast<JobStatus>().FirstOrDefault(x => x.Id == current) ?? jobs.Items.Cast<JobStatus>().FirstOrDefault(x=>x.PlanningPending||WizardRules.CanContinue(x.States)) ?? jobs.Items[0];
         }
         finally { loadingJobs = false; }
         ShowSelectedJob();
@@ -323,6 +328,7 @@ internal sealed partial class MainForm : Form
         }
         displayedJob = job;
         summary.Text = $"{job.SourceLabel ?? "Origem registrada no plano da execução"}\n{UiRules.CutoffLabel(job.CutoffDateInclusive, job.CutoffTimeZoneId)}\n{UiRules.JobSummary(job.States)}";
+        if(job.PlanningPending)summary.Text=$"{job.SourceLabel??"Origem do planejamento salvo"}\n{UiRules.CutoffLabel(job.CutoffDateInclusive,job.CutoffTimeZoneId)}\nPlanejamento incompleto: {job.PlanningAnalyzed:N0}/{job.PlanningTotal:N0} itens analisados e salvos. Use Continuar arquivamento para retomar.";
         if (job.PreserveFolderStructure) summary.Text += "\nPastas: estrutura da origem, com as pastas padrão no idioma do PST.";
         if(job.Workflow is { } flow){summary.Text+=$"\nLotes: {flow.CompletedBatches}/{flow.TotalBatches} concluídos · {flow.ReviewBatches} com pendências";ApplyWorkflowProgress(flow,false);}
         stateGrid.DataSource = job.States.Select(x => new { Situação = UiRules.StateLabel(x.Key), Quantidade = x.Value }).ToList();
@@ -458,19 +464,20 @@ internal sealed partial class MainForm : Form
     private void UpdateActions()
     {
         bool job = jobs.SelectedItem is JobStatus && activeRoot is not null;
+        bool ready=job && displayedJob?.PlanningPending!=true;
         connect.Enabled = !busy;
         destinationMode.Enabled = !busy; existingPst.Enabled = browsePst.Enabled = !busy && destinationMode.SelectedIndex == 1;
         root.ReadOnly = busy; search.Enabled = sources.Enabled = includeChildren.Enabled = retainedMsgBackup.Enabled = volumeSize.Enabled = jobs.Enabled = !busy;
         cutoffEnabled.Enabled = !busy; cutoffPicker.Enabled = !busy && cutoffEnabled.Checked;
         plan.Enabled = !busy && sources.SelectedNode?.Tag is SourceSelection;
         var states=displayedJob?.States ?? new Dictionary<string,int>();
-        copy.Enabled=!busy && job && WizardRules.CanCopy(states);
-        verify.Enabled=!busy && job && WizardRules.CanVerify(states,autoMoveCurrent.Checked);
-        reconcile.Enabled=!busy && job && WizardRules.CanReconcile(states);
+        copy.Enabled=!busy && ready && WizardRules.CanCopy(states);
+        verify.Enabled=!busy && ready && WizardRules.CanVerify(states,autoMoveCurrent.Checked);
+        reconcile.Enabled=!busy && ready && WizardRules.CanReconcile(states);
         pendingReport.Enabled = !busy && job;
-        remove.Enabled = !busy && job && WizardRules.CanRemove(states);
+        remove.Enabled = !busy && ready && WizardRules.CanRemove(states);
         autoMoveNew.Enabled=autoMoveCurrent.Enabled=!busy;
-        continueArchive.Enabled=!busy && job && WizardRules.NextAction(states,autoMoveCurrent.Checked)!=ContinueAction.None;
+        continueArchive.Enabled=!busy && job && (displayedJob?.PlanningPending==true || WizardRules.NextAction(states,autoMoveCurrent.Checked)!=ContinueAction.None);
         pauseAfterBatch.Enabled=busy && workflowRunning && engine.IsRunning && !batchPauseRequested;
         stop.Enabled = busy && engine.IsRunning;
         UpdateWizardActions();

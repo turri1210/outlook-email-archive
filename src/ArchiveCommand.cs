@@ -22,6 +22,7 @@ internal static class ArchiveCommand
             }
             bool? autoMove=move ? true : keep ? false : null;
             if(args[0]=="archive-workflow-self-test" && args.Length==1)return ArchiveWorkflowTests.Run();
+            if(args[0]=="archive-planning-self-test" && args.Length==1)return ArchivePlanningTests.Run();
             if(args[0]=="archive-storage-self-test" && args.Length==1)return ArchiveStorageTests.Run();
             if(args[0]=="archive-source-index-audit" && args.Length==3)
             {
@@ -201,6 +202,8 @@ internal static class ArchiveCommand
                 config.Validate(); using var backend = new OutlookArchiveBackend(); using var engine = new ArchiveEngine(config.RootDirectory, backend);
                 string id = engine.Plan(config); Console.WriteLine("EXECUCAO=" + id); return 0;
             }
+            if(args[0]=="archive-plan-resume" && args.Length==3)
+            {using var backend=new OutlookArchiveBackend();using var engine=new ArchiveEngine(args[1],backend);Console.WriteLine("EXECUCAO="+engine.ResumePlanning(args[2]));return 0;}
             if (args[0] == "archive-status" && args.Length is 2 or 3)
             {
                 ArchiveFiles.ValidateLocalDirectory(args[1]);
@@ -211,6 +214,9 @@ internal static class ArchiveCommand
                     var config = JsonSerializer.Deserialize<ArchivePlanEnvelope>(job.ConfigJson)!.Config;
                     var items = ledger.GetItems(job.Id);
                     return new { job.Id, job.CreatedUtc,
+                        job.PlanningPending,
+                        PlanningAnalyzed=job.PlanningPending?ledger.PlanningCount(job.Id):0,
+                        PlanningTotal=job.PlanningPending?ledger.PlanningScope(job.Id).Folders.Sum(x=>x.EntryIds.Count):0,
                         SourceStoreId = config.SourceStoreId,
                         SourceFolderId = config.SourceFolderId,
                         SourceLabel = config.SourceLabel,

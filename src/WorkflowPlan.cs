@@ -9,6 +9,7 @@ internal static class WorkflowPlan
     {var states=items.Select(x=>x.State).ToList();return states.Any(x=>Actionable(x,move))?"Pending":states.All(x=>Done(x,move))?"Complete":"Review";}
     internal static void Ensure(ArchiveLedger ledger,ArchiveJob job,bool move,bool recoverTransient=false)
     {
+        if(job.PlanningPending)throw new ArchiveReviewException("Conclua o planejamento interrompido antes de preparar os lotes.");
         var config=JsonSerializer.Deserialize<ArchivePlanEnvelope>(job.ConfigJson)!;
         string plan=ArchiveFiles.Child(job.RootDirectory,Path.Combine(job.RootDirectory,"source-plan.json"));
         if(ArchiveFiles.Sha(plan)!=config.PlanSha256)throw new ArchiveReviewException("Plano original alterado; lotes não serão preparados.");

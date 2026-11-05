@@ -31,12 +31,26 @@ internal sealed partial class MainForm
     private async Task ContinueArchive()
     {
         if(busy || displayedJob is not { } job)return;
+        if(job.PlanningPending){await ResumePreparation(job);return;}
         var action=WizardRules.NextAction(job.States,autoMoveCurrent.Checked);
         if(action==ContinueAction.None)return;
         if(action==ContinueAction.Remove){await Remove();return;}
         workflowRunning=true;batchPauseRequested=false;
         try{await Execute("archive-workflow-run","Conferindo o Outlook, os PSTs e os lotes pendentes…");}
         finally{workflowRunning=false;UpdateActions();}
+    }
+    private async Task ResumePreparation(JobStatus job)
+    {
+        if(activeRoot is null)return;
+        string directory=activeRoot;
+        await Guarded("Retomando o planejamento salvo…",async()=>
+        {
+            preparingJobId=job.Id;
+            EnsureSuccess(await engine.RunAsync(["archive-plan-resume",directory,job.Id],AppendLog));
+            EnsureSuccess(await engine.RunAsync(["archive-workflow-prepare",directory,job.Id,autoMoveCurrent.Checked?"--move-validated-to-trash":"--keep-originals"],AppendLog));
+            await WaitForStatusPoll();await RefreshJobs(job.Id);ShowStep(5);
+            activity.Text="Planejamento concluído. Use Continuar arquivamento para iniciar os lotes.";
+        });
     }
     private void RequestBatchPause()
     {

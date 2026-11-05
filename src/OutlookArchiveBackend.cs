@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 
-internal sealed partial class OutlookArchiveBackend : IArchiveBackend
+internal sealed partial class OutlookArchiveBackend : IArchiveBackend, IArchiveResumableScopeBackend
 {
     private const string TokenProperty = "http://schemas.microsoft.com/mapi/string/{DDB565AD-3206-4E72-B044-C54157137867}/TransferToken";
     private const string OwnerProperty = "http://schemas.microsoft.com/mapi/string/{DDB565AD-3206-4E72-B044-C54157137867}/VolumeOwner";
@@ -77,7 +77,8 @@ internal sealed partial class OutlookArchiveBackend : IArchiveBackend
         finally { Release(children); }
     }
     public List<SourceDescriptor> Discover(ArchiveConfig config) => DiscoverFrozen(config, CaptureScope(config));
-    public List<FolderScopeSnapshot> CaptureScope(ArchiveConfig config)
+    public List<FolderScopeSnapshot> CaptureScope(ArchiveConfig config)=>CaptureScope(config,[],_=>{});
+    public List<FolderScopeSnapshot> CaptureScope(ArchiveConfig config,IReadOnlyList<FolderScopeSnapshot> saved,Action<FolderScopeSnapshot> checkpoint)
     {
         object? folder = null; var scope = new List<FolderScopeSnapshot>();
         try
@@ -96,11 +97,13 @@ internal sealed partial class OutlookArchiveBackend : IArchiveBackend
                 finally { Release(store); }
             }
             if (config.PreserveFolderStructure) { InitializeFolderStructure(config.SourceStoreId); config.FolderMappings.Clear(); }
-            CaptureFolders(folder, [], config, scope); return scope;
+            CaptureFolders(folder, [], config, scope,saved.ToDictionary(x=>x.FolderId),checkpoint);
+            if(saved.Any(x=>!scope.Any(y=>y.FolderId==x.FolderId)))throw new ArchiveReviewException("Uma pasta já capturada não está mais na origem. Escopo preservado para revisão.");
+            return scope;
         }
         finally { Release(folder); }
     }
-    private void CaptureFolders(object folder, string[] parent, ArchiveConfig config, List<FolderScopeSnapshot> scope)
+    private void CaptureFolders(object folder, string[] parent, ArchiveConfig config, List<FolderScopeSnapshot> scope,IReadOnlyDictionary<string,FolderScopeSnapshot> saved,Action<FolderScopeSnapshot> checkpoint)
     {
         object? children = null;
         try
@@ -108,17 +111,20 @@ internal sealed partial class OutlookArchiveBackend : IArchiveBackend
             if (Property(folder, "http://schemas.microsoft.com/mapi/proptag/0x36010003") is int type && type == 2) return;
             string[] path = [.. parent, (string)((dynamic)folder).Name];
             if (config.PreserveFolderStructure) RegisterFolderDestination(folder, path, config);
-            var ids = CaptureEntryIds(folder, config.MaxItems);
+            string folderId=(string)((dynamic)folder).EntryID;
+            bool retained=saved.TryGetValue(folderId,out var previous);
+            if(retained && !previous!.RelativePath.SequenceEqual(path))throw new ArchiveReviewException("Uma pasta já capturada foi renomeada ou movida. Escopo preservado para revisão.");
+            var ids = retained ? previous!.EntryIds.ToList() : CaptureEntryIds(folder, config.MaxItems);
             if ((long)scope.Sum(x => x.EntryIds.Count) + ids.Count > config.MaxItems)
                 throw new ArchiveReviewException("Limite de identidades do escopo atingido; nenhum plano parcial será criado.");
-            scope.Add(new((string)((dynamic)folder).EntryID, path, ids));
+            var snapshot=new FolderScopeSnapshot(folderId,path,ids);scope.Add(snapshot);if(!retained)checkpoint(snapshot);
             Console.WriteLine($"Planejamento: escopo inicial de {ids.Count:N0} itens capturado — {string.Join(" > ", path)}");
             if (!config.IncludeSubfolders) return;
             children = ((dynamic)folder).Folders; int count = (int)((dynamic)children).Count;
             for (int i = 1; i <= count; i++)
             {
                 object? child = null;
-                try { child = ((dynamic)children)[i]; CaptureFolders(child, path, config, scope); }
+                try { child = ((dynamic)children)[i]; CaptureFolders(child, path, config, scope,saved,checkpoint); }
                 finally { Release(child); }
             }
         }
@@ -180,7 +186,7 @@ internal sealed partial class OutlookArchiveBackend : IArchiveBackend
         foreach (var folder in scope)
         {
             int count = folder.EntryIds.Count, scanned = 0;
-            Console.WriteLine($"Planejamento: 0/{count:N0} itens do escopo inicial — {string.Join(" > ", folder.RelativePath)}");
+            if(count>1)Console.WriteLine($"Planejamento: 0/{count:N0} itens do escopo inicial — {string.Join(" > ", folder.RelativePath)}");
             for (int index = 0; index < folder.EntryIds.Count; index++)
             {
                 string id = folder.EntryIds[index];
@@ -216,7 +222,7 @@ internal sealed partial class OutlookArchiveBackend : IArchiveBackend
                 finally
                 {
                     Release(parent); Release(item); scanned++;
-                    if (scanned % 100 == 0 || scanned == count)
+                    if (count>1 && (scanned % 100 == 0 || scanned == count))
                         Console.WriteLine($"Planejamento: {scanned:N0}/{count:N0} do escopo inicial analisados; {rows.Count:N0} selecionados — {string.Join(" > ", folder.RelativePath)}");
                 }
             }
