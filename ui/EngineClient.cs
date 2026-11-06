@@ -198,6 +198,8 @@ internal static class UiRules
 {
     internal static string ErrorMessage(string technicalMessage)
     {
+        if(technicalMessage.Contains("Network problems",StringComparison.OrdinalIgnoreCase) || technicalMessage.Contains("can't contact the server",StringComparison.OrdinalIgnoreCase) || technicalMessage.Contains("ArchiveConnectionException",StringComparison.Ordinal))
+            return "O Outlook não conseguiu se conectar ao Microsoft Exchange. Aguarde a conexão voltar e tente novamente.\n\nSe estava preparando o backup, o progresso salvo foi preservado: use Continuar arquivamento na mesma execução, sem iniciar outro planejamento.";
         if(technicalMessage.Contains("0x800706BA",StringComparison.OrdinalIgnoreCase) ||
            technicalMessage.Contains("0x800401E3",StringComparison.OrdinalIgnoreCase))
             return "Abra o Outlook clássico e aguarde o carregamento da sua caixa de e-mail. Depois, volte a este programa e tente novamente.\n\nO novo Outlook não é compatível com esta automação.";

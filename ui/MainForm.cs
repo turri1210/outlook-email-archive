@@ -211,7 +211,18 @@ internal sealed partial class MainForm : Form
             activity.Text = "Operação interrompida por você. Registros já gravados foram preservados.";
             AppendLog("Interrupção solicitada. Selecione a execução em Continuar backup; o planejamento retoma os checkpoints já gravados.");
         }
-        catch (Exception ex) { string friendlyMessage=UiRules.ErrorMessage(ex.Message); activity.Text = friendlyMessage==ex.Message ? "Operação não concluída. Consulte a pasta de logs para detalhes." : "Abra o Outlook clássico e tente novamente."; AppendLog(ex.ToString()); MessageBox.Show(this, friendlyMessage, "Arquivamento", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
+        catch (Exception ex)
+        {
+            bool planning=preparingJobId is not null;
+            if(planning)
+            {
+                try{await WaitForStatusPoll();await RefreshJobs(preparingJobId);ShowStep(5);}
+                catch(Exception refreshError){AppendLog("Não foi possível selecionar o planejamento salvo: "+refreshError.Message);}
+            }
+            string friendlyMessage=UiRules.ErrorMessage(ex.Message);
+            activity.Text=planning?"Planejamento preservado. Após resolver o aviso, use Continuar arquivamento nesta execução.":"Operação não concluída. Consulte a pasta de logs para detalhes.";
+            AppendLog(ex.ToString());MessageBox.Show(this,friendlyMessage,"Arquivamento",MessageBoxButtons.OK,MessageBoxIcon.Warning);
+        }
         finally { preparingJobId=null;timer.Stop(); busy = false; progress.Style = ProgressBarStyle.Continuous; progress.Value = 0; if(displayedJob?.Workflow is { } flow)ApplyWorkflowProgress(flow,false); UpdateActions(); }
     }
     private async Task LoadSources()

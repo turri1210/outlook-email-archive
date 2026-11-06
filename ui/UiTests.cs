@@ -19,6 +19,8 @@ internal static class UiTests
             Check(UiRules.ErrorMessage("MissingMemberException: Could not get dispid for Count (error: 0x800706BA).").StartsWith("Abra o Outlook clássico"),"Falha de conexão não orienta a abrir o Outlook clássico.");
             Check(UiRules.ErrorMessage("COMException: 0x800401e3").Contains("O novo Outlook não é compatível"),"Outlook fechado não recebe orientação correta.");
             Check(UiRules.ErrorMessage("PST indisponível")=="PST indisponível","Erro de PST foi confundido com Outlook fechado.");
+            Check(UiRules.ErrorMessage("COMException: Network problems are preventing connection to Microsoft Exchange.").Contains("sem iniciar outro planejamento"),"Falha do Exchange não orienta a preservar o planejamento.");
+            Check(UiRules.ErrorMessage("COMException: We can't complete this because we can't contact the server right now.").Contains("mesma execução"),"Falha temporária do servidor incentiva outro plano.");
             WizardActionTests(Check);
             Check(WizardRules.CanVerify(new Dictionary<string,int>{{"Verified",5}},true),"Movimento automático não habilitou itens já validados.");
             Check(!WizardRules.CanVerify(new Dictionary<string,int>{{"InDeletedItems",5}},true),"Itens já movidos habilitaram repetição automática.");

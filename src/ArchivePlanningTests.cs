@@ -2,6 +2,15 @@ internal static class ArchivePlanningTests
 {
     internal static int Run()
     {
+        int attempts=0,waits=0;
+        int result=ArchivePlanningConnection.Read(()=>{attempts++;if(attempts<3)throw new System.Runtime.InteropServices.COMException("Network problems",unchecked((int)0x80040115));return 7;},_=>waits++);
+        Check(result==7 && attempts==3 && waits==2,"Falha transitória não repetiu somente a leitura pendente.");
+        attempts=0;
+        try{ArchivePlanningConnection.Read<int>(()=>{attempts++;throw new System.Runtime.InteropServices.COMException("Network problems",unchecked((int)0x80040115));},_=>{});throw new Exception("Falha persistente não foi interrompida.");}
+        catch(ArchiveConnectionException){Check(attempts==3,"Número de tentativas sem limite.");}
+        attempts=0;
+        try{ArchivePlanningConnection.Read<int>(()=>{attempts++;throw new System.Runtime.InteropServices.COMException("Item missing",unchecked((int)0x8004010F));},_=>{});throw new Exception("Item ausente foi ignorado.");}
+        catch(System.Runtime.InteropServices.COMException){Check(attempts==1,"Item ausente foi tratado como falha de rede.");}
         foreach(string phase in new[]{"scope-checkpoint","item-checkpoint","before-catalog"})
         {
             string path=Path.Combine(Path.GetTempPath(),"archive-planning-"+Guid.NewGuid().ToString("N"));

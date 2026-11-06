@@ -48,6 +48,12 @@ O comando técnico de retomada é `archive-plan-resume <raiz> <execução>`.
 `archive-planning-self-test` exercita interrupções na captura, na análise e antes
 do registro final, usando apenas mensagens artificiais.
 
+Falhas de comunicação com o Exchange durante o planejamento recebem até três
+tentativas na mesma leitura. Persistindo a falha, o progresso permanece salvo
+e a interface seleciona o planejamento interrompido. Aguarde a conexão voltar
+e use **Continuar arquivamento**, sem iniciar um novo backup. Mensagens ausentes
+ou divergências de identidade não são tratadas como falhas temporárias de rede.
+
 O plano inicial permanece congelado. O manifesto `jobs/<execução>/workflow/manifest.json` divide os itens em grupos de até 100, preservando inteiros os lotes nativos que já existiam. O banco registra os membros e o checkpoint de cada lote em transações duráveis.
 
 Continuar arquivamento confere a conexão com o Outlook clássico, a presença dos PSTs, o acesso às pastas e a reserva de espaço. Depois processa somente os lotes abertos: copiar o que falta, validar as cópias e mover apenas os aprovados, quando autorizado. Lotes concluídos não têm seu conteúdo reaberto; consultas a índices e contagens continuam necessárias. Pendências ficam em lotes para revisão e não impedem o avanço nos demais.

@@ -79,10 +79,10 @@ internal sealed partial class ArchiveEngine
                 saved.Add(folder);ledger.SavePlanningScope(job,new(saved,false),config);PlanningFault?.Invoke("scope-checkpoint",saved.Count);
             }
             List<FolderScopeSnapshot> captured;
-            if(backend is IArchiveResumableScopeBackend resumable)captured=resumable.CaptureScope(config,saved.ToList(),Checkpoint);
+            if(backend is IArchiveResumableScopeBackend resumable)captured=ArchivePlanningConnection.Read(()=>resumable.CaptureScope(config,saved.ToList(),Checkpoint));
             else
             {
-                captured=backend.CaptureScope(config).Select(folder=>saved.SingleOrDefault(x=>x.FolderId==folder.FolderId)??folder).ToList();
+                captured=ArchivePlanningConnection.Read(()=>backend.CaptureScope(config)).Select(folder=>saved.SingleOrDefault(x=>x.FolderId==folder.FolderId)??folder).ToList();
                 if(saved.Any(x=>!captured.Any(y=>x.FolderId==y.FolderId)))throw new ArchiveReviewException("Uma pasta capturada não está mais na origem.");
                 foreach(var folder in captured)if(!saved.Any(x=>x.FolderId==folder.FolderId))Checkpoint(folder);
             }
@@ -97,7 +97,7 @@ internal sealed partial class ArchiveEngine
         Console.WriteLine($"Planejamento: retomando {completed.Count:N0}/{inputs.Count:N0} itens já analisados.");
         for(int index=completed.Count;index<inputs.Count;index++)
         {
-            var input=inputs[index];var found=backend.DiscoverFrozen(config,[new(input.Folder.FolderId,input.Folder.RelativePath,[input.Entry])]);
+            var input=inputs[index];var found=ArchivePlanningConnection.Read(()=>backend.DiscoverFrozen(config,[new(input.Folder.FolderId,input.Folder.RelativePath,[input.Entry])]));
             if(found.Count>1)throw new ArchiveReviewException("Descoberta retornou mais de um item para a identidade congelada.");
             var row=new PlanningEntry(index,input.Folder.FolderId,input.Entry,found.SingleOrDefault());
             CheckPlanningEntry(row,input.Folder,input.Entry,config);ledger.AddPlanningEntry(id,row);completed.Add(row);
