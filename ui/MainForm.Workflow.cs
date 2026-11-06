@@ -24,6 +24,7 @@ internal sealed partial class MainForm
     private readonly Button continueArchive=Button("Continuar arquivamento",true);
     private readonly Button pauseAfterBatch=Button("Pausar após este lote");
     private readonly CheckBox advancedActions=new(){Text="Ações avançadas",AutoSize=true};
+    private readonly CheckBox retainedMsgCurrent=new(){Text="Permitir validação com backup MSG retido nesta execução",AutoSize=true,AccessibleName="Autorizar backup MSG na execução atual"};
     private readonly ComboBox pendingGroups=new(){Dock=DockStyle.Fill,DropDownStyle=ComboBoxStyle.DropDownList,AccessibleName="Grupos de pendências"};
     private bool workflowRunning,loadingPendingGroups,batchPauseRequested;
     private sealed record PendingGroup(string Key,int Count)

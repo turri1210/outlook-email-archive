@@ -71,7 +71,18 @@ Continuar arquivamento confere a conexão com o Outlook clássico, a presença d
 
 O botão também fica disponível quando só há itens para reconciliar ou remover. Ao acioná-lo, cada lote com pendências é reconciliado uma vez; os itens recuperados seguem para validação e movimento autorizado no mesmo fluxo. Divergências que persistirem continuam em Pendências, sem repetição automática. Os estados atuais das mensagens prevalecem sobre um checkpoint antigo do lote. Quando restar apenas remoção manual, Continuar abre a confirmação de remoção existente; a exclusão definitiva nunca é iniciada automaticamente.
 
-Pausar após este lote cria uma solicitação local que o motor reconhece depois de gravar o checkpoint do lote. Interromper continua disponível para parar imediatamente; nesse caso a retomada usa as intenções por mensagem do lote interrompido. Falhas que deixam itens sem processamento pausam o fluxo, sem repetição em ciclo. O usuário retoma após conferir o Outlook.
+Pausar após este lote cria uma solicitação local que o motor reconhece depois de gravar o checkpoint do lote. Interromper continua disponível para parar imediatamente; nesse caso a retomada usa as intenções por mensagem do lote interrompido. Falhas que deixam itens sem processamento interrompem o fluxo com erro, sem repetição em ciclo. O usuário retoma após corrigir a causa.
+
+Uma execução normal segue de um lote para o próximo automaticamente. O estado
+**Pausado** fica reservado às solicitações do usuário. Um lote que não consegue
+concluir a cópia ou a validação fica **Bloqueado**, com erro explícito, e não é
+anunciado como concluído. Após resolver a causa, Continuar retoma os itens salvos.
+
+Se a validação for bloqueada porque o Outlook mantém o PST ocupado, pode-se
+autorizar **Permitir validação com backup MSG retido nesta execução**, em
+**Ações avançadas**, sem criar outro plano. Essa autorização não é marcada
+automaticamente: ela permite a prova adicional já existente, mantendo as demais
+verificações e a proibição de mover originais divergentes.
 
 A versão do catálogo passa a exigir o motor com suporte ao fluxo por lotes. Um backup anterior à conversão é preservado para diagnóstico; ele não deve substituir o catálogo após novas movimentações, pois isso descartaria checkpoints posteriores.
 

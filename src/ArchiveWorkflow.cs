@@ -11,7 +11,7 @@ internal sealed partial class ArchiveEngine
     {
         var job=ledger.GetJob(jobId);var config=Envelope(job).Config;
         WorkflowPlan.Ensure(ledger,job,move);
-        if(!NativeWorkersIdle(jobId))return 4;
+        if(!NativeWorkersIdle(jobId))throw new ArchiveReviewException("Uma cópia nativa anterior ainda está em andamento. Aguarde sua conclusão antes de continuar; o histórico foi preservado.");
         var batches=ledger.WorkflowBatches(jobId);
         // Validate catalog-only ownership once. No concluded message is opened.
         var assignment=batches.SelectMany(b=>b.Items.Select(k=>(Key:k,Number:b.Number))).ToDictionary(x=>x.Key,x=>x.Number);
@@ -66,12 +66,20 @@ internal sealed partial class ArchiveEngine
                 Report("Validando as cópias e concluindo o lote",true);
                 Verify(jobId,allowRetainedBackup:allowRetainedBackup,pendingOnly:true,moveValidatedToDeletedItems:move);
                 rows=WorkItems(jobId);string state=WorkflowPlan.Classify(rows,move);
-                ledger.SetWorkflowState(jobId,batch.Number,state=="Pending"?"Paused":state);
+                ledger.SetWorkflowState(jobId,batch.Number,state=="Pending"?"Blocked":state);
                 Fault?.Invoke("after-workflow-batch-checkpoint",rows.First());
                 Report("Organizando as evidências dos itens concluídos",true);
                 MaintainStorage(jobId);
+                if(state=="Pending")
+                {
+                    Report("Execução interrompida por bloqueio; o lote ainda não foi concluído",true);
+                    string reason=rows.Any(x=>x.Error=="destination_durable_reopen_or_independent_backup_missing")
+                        ? "O Outlook mantém o PST ocupado e a prova adicional com backup MSG retido não está autorizada nesta execução. Feche as mensagens abertas desse PST e tente novamente. Se preferir autorizar a prova adicional, marque Permitir validação com backup MSG retido nesta execução, em Ações avançadas."
+                        : string.Join("; ",rows.Where(x=>WorkflowPlan.Actionable(x.State,move)&&x.Error is not null).Select(x=>x.Error).Distinct().Take(3));
+                    if(string.IsNullOrWhiteSpace(reason))reason="Há itens do lote que não puderam ser concluídos nesta tentativa. Confira o Outlook e as pendências antes de retomar.";
+                    throw new ArchiveReviewException($"Lote {batch.Number} não concluído: {reason} O progresso foi preservado; a execução não está em pausa voluntária.");
+                }
                 Report(state=="Review"?"Lote encerrado; pendências separadas para revisão":"Lote concluído",true);
-                if(state=="Pending")return 4; // A failing item is never retried in a loop.
                 if(pauseRequested?.Invoke()==true || File.Exists(request))
                 {
                     var next=batches.FirstOrDefault(x=>x.Number>batch.Number && x.State is not ("Complete" or "Review"));

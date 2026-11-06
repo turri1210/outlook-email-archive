@@ -220,7 +220,7 @@ internal sealed partial class MainForm : Form
                 catch(Exception refreshError){AppendLog("Não foi possível selecionar o planejamento salvo: "+refreshError.Message);}
             }
             string friendlyMessage=UiRules.ErrorMessage(ex.Message);
-            activity.Text=planning?"Planejamento preservado. Após resolver o aviso, use Continuar arquivamento nesta execução.":"Operação não concluída. Consulte a pasta de logs para detalhes.";
+            activity.Text=planning?"Planejamento preservado. Após resolver o aviso, use Continuar arquivamento nesta execução.":"Operação interrompida: "+friendlyMessage.Split('\n')[0];
             AppendLog(ex.ToString());MessageBox.Show(this,friendlyMessage,"Arquivamento",MessageBoxButtons.OK,MessageBoxIcon.Warning);
         }
         finally { preparingJobId=null;timer.Stop(); busy = false; progress.Style = ProgressBarStyle.Continuous; progress.Value = 0; if(displayedJob?.Workflow is { } flow)ApplyWorkflowProgress(flow,false); UpdateActions(); }
@@ -334,9 +334,15 @@ internal sealed partial class MainForm : Form
         if (displayedJob?.Id != job.Id)
         {
             pendingPage = 0;loadingAutoMovement=true;
-            try{autoMoveCurrent.Checked=RemovalPreferences.Read(root.Text,job.Id,Path.Combine(root.Text,"preferences","automatic-movement")) ?? job.Workflow?.MoveOriginals ?? job.MoveValidatedToDeletedItems;}
+            try
+            {
+                autoMoveCurrent.Checked=RemovalPreferences.Read(root.Text,job.Id,Path.Combine(root.Text,"preferences","automatic-movement")) ?? job.Workflow?.MoveOriginals ?? job.MoveValidatedToDeletedItems;
+            }
             finally{loadingAutoMovement=false;}
         }
+        loadingAutoMovement=true;
+        try{retainedMsgCurrent.Checked=job.RetainedMsgBackupForRemoval || RemovalPreferences.Read(root.Text,job.Id)==true;}
+        finally{loadingAutoMovement=false;}
         displayedJob = job;
         summary.Text = $"{job.SourceLabel ?? "Origem registrada no plano da execução"}\n{UiRules.CutoffLabel(job.CutoffDateInclusive, job.CutoffTimeZoneId)}\n{UiRules.JobSummary(job.States)}";
         if(job.PlanningPending)summary.Text=$"{job.SourceLabel??"Origem do planejamento salvo"}\n{UiRules.CutoffLabel(job.CutoffDateInclusive,job.CutoffTimeZoneId)}\nPlanejamento incompleto: {job.PlanningAnalyzed:N0}/{job.PlanningTotal:N0} itens analisados e salvos. Use Continuar arquivamento para retomar.";
@@ -374,7 +380,7 @@ internal sealed partial class MainForm : Form
         {
             string[] arguments = command == "archive-verify"
                 ? UiRules.VerificationArguments(directory, job.Id, RemovalPreferences.Read(directory, job.Id) == true) : [command, directory, job.Id];
-            if(command is "archive-run" or "archive-workflow-run" && autoMoveCurrent.Checked && RemovalPreferences.Read(directory,job.Id)==true)
+            if(command is "archive-run" or "archive-workflow-run" && RemovalPreferences.Read(directory,job.Id)==true)
                 arguments=[..arguments,"--allow-retained-msg-backup"];
             if(command is "archive-run" or "archive-verify" or "archive-workflow-run")
                 arguments=[..arguments,autoMoveCurrent.Checked ? "--move-validated-to-trash" : "--keep-originals"];
@@ -488,6 +494,7 @@ internal sealed partial class MainForm : Form
         pendingReport.Enabled = !busy && job;
         remove.Enabled = !busy && ready && WizardRules.CanRemove(states);
         autoMoveNew.Enabled=autoMoveCurrent.Enabled=!busy;
+        retainedMsgCurrent.Enabled=!busy && ready && displayedJob?.RetainedMsgBackupForRemoval!=true;
         continueArchive.Enabled=!busy && job && (displayedJob?.PlanningPending==true || WizardRules.NextAction(states,autoMoveCurrent.Checked)!=ContinueAction.None);
         pauseAfterBatch.Enabled=busy && workflowRunning && engine.IsRunning && !batchPauseRequested;
         stop.Enabled = busy && engine.IsRunning;

@@ -82,7 +82,7 @@ internal sealed partial class ArchiveLedger
     }
     internal void SetWorkflowState(string job,int number,string state)
     {
-        if(state is not ("Pending" or "Running" or "Paused" or "Complete" or "Review"))throw new ArgumentException("Estado de lote inválido.");
+        if(state is not ("Pending" or "Running" or "Paused" or "Blocked" or "Complete" or "Review"))throw new ArgumentException("Estado de lote inválido.");
         using var tx=connection.BeginTransaction();Run("UPDATE workflow_batches SET state=$s WHERE job=$j AND number=$n",tx,("$s",state),("$j",job),("$n",number));
         Event(job,"workflow-batch-state",new{Number=number,State=state},tx);tx.Commit();
     }
@@ -103,7 +103,7 @@ internal sealed partial class ArchiveLedger
         var batches=WorkflowBatches(job);
         int complete=counts.Where(x=>WorkflowPlan.Done(x.Key,manifest.Value.Move)).Sum(x=>x.Value);
         int reviews=counts.Where(x=>!WorkflowPlan.Done(x.Key,manifest.Value.Move)&&!WorkflowPlan.Actionable(x.Key,manifest.Value.Move)).Sum(x=>x.Value);
-        var current=batches.FirstOrDefault(x=>x.State is "Running" or "Paused");
+        var current=batches.FirstOrDefault(x=>x.State is "Running" or "Paused" or "Blocked");
         return new(){MoveOriginals=manifest.Value.Move,TotalItems=counts.Values.Sum(),CompleteItems=complete,ReviewItems=reviews,PendingItems=counts.Values.Sum()-complete-reviews,TotalBatches=batches.Count,CompletedBatches=batches.Count(x=>x.State=="Complete"),ReviewBatches=batches.Count(x=>x.State=="Review"),CurrentBatch=current?.Number??0,
             State=current?.State ?? (batches.Any(x=>x.State=="Pending")?"Ready":reviews>0?"Review":"Complete")};
     }

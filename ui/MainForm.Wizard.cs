@@ -67,7 +67,15 @@ internal sealed partial class MainForm
         pendingPanel.Controls.Add(errorGrid,0,1);var pendingTools=new FlowLayoutPanel{Dock=DockStyle.Fill,AutoSize=true,WrapContents=true};pendingTools.Controls.AddRange([previousPending,pendingPageLabel,nextPending,pendingHelp,pendingReport]);BoundFlow(pendingTools);pendingPanel.Controls.Add(pendingTools,0,2);pending.Controls.Add(pendingPanel);
         tabs.TabPages.AddRange([states,volumes,pending]);execution.Controls.Add(tabs,0,1);
         var actions=new FlowLayoutPanel{Dock=DockStyle.Fill,AutoSize=true,WrapContents=true,Padding=new Padding(0,8,0,0)};actions.Controls.AddRange([continueArchive,pauseAfterBatch,advancedActions]);BoundFlow(actions);execution.Controls.Add(actions,0,3);
-        var advanced=new FlowLayoutPanel{Dock=DockStyle.Fill,AutoSize=true,WrapContents=true,Visible=false};advanced.Controls.AddRange([copy,verify,reconcile,remove]);execution.Controls.Add(advanced,0,4);BoundFlow(advanced);
+        var advanced=new FlowLayoutPanel{Dock=DockStyle.Fill,AutoSize=true,WrapContents=true,Visible=false};advanced.Controls.AddRange([copy,verify,reconcile,remove,retainedMsgCurrent]);execution.Controls.Add(advanced,0,4);BoundFlow(advanced);
+        hints.SetToolTip(retainedMsgCurrent,UiRules.RetainedMsgExplanation);
+        retainedMsgCurrent.CheckedChanged+=(_,_)=>{
+            if(!loadingAutoMovement && !busy && displayedJob is { } current)
+            {
+                try{RemovalPreferences.Save(root.Text,current.Id,retainedMsgCurrent.Checked);}
+                catch(Exception ex) when(ex is IOException or UnauthorizedAccessException){AppendLog("Não foi possível salvar a autorização MSG: "+ex.Message);}
+            }
+        };
         advancedActions.CheckedChanged+=(_,_)=>advanced.Visible=advancedActions.Checked;
         continueArchive.Click+=async (_,_)=>await ContinueArchive();pauseAfterBatch.Click+=(_,_)=>RequestBatchPause();pages[5].Controls.Add(execution);
         var navigation=new FlowLayoutPanel{Dock=DockStyle.Fill,AutoSize=true,WrapContents=true,FlowDirection=FlowDirection.RightToLeft,Padding=new Padding(0,8,0,0)};

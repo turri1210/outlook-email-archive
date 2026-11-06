@@ -5,7 +5,7 @@ internal static class ArchiveWorkflowTests
     internal static int Run()
     {
         string basePath=Path.Combine(Path.GetTempPath(),"arc-flow-"+Guid.NewGuid().ToString("N")[..12]);Directory.CreateDirectory(basePath);
-        foreach(string scenario in new[]{"pause","crash","review","migration","mode","tamper","checkpoint"})
+        foreach(string scenario in new[]{"pause","crash","review","migration","mode","tamper","checkpoint","blocked"})
         {
             string path=Path.Combine(basePath,scenario),root=Path.Combine(path,"catalog");Directory.CreateDirectory(path);
             using var backend=new FakeArchiveBackend(Path.Combine(path,"mail.json"));
@@ -14,7 +14,17 @@ internal static class ArchiveWorkflowTests
             backend.Save();using var engine=new ArchiveEngine(root,backend);
             var config=new ArchiveConfig{RootDirectory=root,SourceStoreId="source",SourceFolderId="folder",TargetVolumeBytes=128*ArchiveVolumePolicy.MiB};
             string job=engine.Plan(config);
-            if(scenario=="migration")
+            if(scenario=="blocked")
+            {
+                backend.ExclusiveDiskRead=false;
+                try{engine.ContinueWorkflow(job,true);throw new Exception("PST ocupado foi tratado como conclusão ou pausa.");}
+                catch(ArchiveReviewException ex){Check(ex.Message.Contains("PST ocupado"),"Erro de bloqueio perdeu a causa.");}
+                using(var blocked=new ArchiveLedger(Path.Combine(root,"archive.sqlite"),true))Check(blocked.WorkflowStatus(job)!.State=="Blocked","Bloqueio foi registrado como pausa voluntária.");
+                Check(backend.Copies.Count==100 && backend.Sources.All(x=>x.Folder=="folder"),"Falha de validação abriu outro lote ou moveu originais.");
+                backend.ExclusiveDiskRead=true;
+                Check(engine.ContinueWorkflow(job,true)==0 && backend.Copies.Count==205,"Retomada após bloqueio duplicou cópias ou não concluiu.");
+            }
+            else if(scenario=="migration")
             {
                 engine.Copy(job);engine.Verify(job,moveValidatedToDeletedItems:true);
                 int reads=backend.SourceSnapshotCalls;Check(engine.ContinueWorkflow(job,true)==0,"Migração de execução concluída falhou.");
@@ -73,7 +83,7 @@ internal static class ArchiveWorkflowTests
             Check(progress.TotalBatches==3 && progress.TotalItems==205,"Escopo de lotes incorreto.");
             Console.WriteLine("Fluxo por lotes: "+scenario+" aprovado.");
         }
-        Console.WriteLine("Fluxo por lotes: sete cenários aprovados, sem Outlook ou mensagens reais.");return 0;
+        Console.WriteLine("Fluxo por lotes: oito cenários aprovados, sem Outlook ou mensagens reais.");return 0;
     }
     private static void Check(bool value,string error){if(!value)throw new Exception(error);}
 }

@@ -89,6 +89,7 @@ internal static class UiTests
             Check(controls.OfType<Button>().Single(x => x.Text == "Remover originais…").Enabled == false, "Remoção habilitada sem execução.");
             Check(controls.OfType<Button>().Single(x => x.Text == "Copiar / retomar").Enabled == false, "Cópia habilitada sem execução.");
             Check(!controls.OfType<CheckBox>().Single(x => x.Text == "Permitir validação com backup MSG retido").Checked, "Prova alternativa habilitada por padrão.");
+            Check(!controls.OfType<CheckBox>().Single(x=>x.AccessibleName=="Autorizar backup MSG na execução atual").Checked,"Execução atual autorizou prova MSG sem escolha do usuário.");
             var cutoffEnabled = controls.OfType<CheckBox>().Single(x => x.AccessibleName == "Limitar por data de corte");
             var cutoffPicker = controls.OfType<DateTimePicker>().Single(x => x.AccessibleName == "Data de corte inclusiva");
             Check(!cutoffEnabled.Checked && !cutoffPicker.Enabled, "Data de corte habilitada por padrão.");
