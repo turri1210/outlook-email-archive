@@ -42,6 +42,12 @@ estiver indisponível. Outros erros não habilitam automaticamente essa alternat
 
 ### Retomar a preparação
 
+A abertura normal restaura a última execução selecionada nesta instalação, em
+vez de trocar automaticamente para a tentativa mais recente. A lista distingue
+**plano preparado** de **planejamento incompleto** e mostra as quantidades.
+Uma seleção explícita do usuário continua tendo prioridade. Isso não apaga nem
+combina execuções antigas e não inicia operações automaticamente.
+
 Ao iniciar um planejamento, a execução é registrada antes da leitura dos e-mails.
 As identidades de cada pasta capturada e o resultado da análise de cada mensagem
 são salvos no catálogo. Ao interromper e reabrir, escolha **Continuar backup** e

@@ -186,7 +186,8 @@ internal sealed partial class MainForm : Form
         if (InvokeRequired) { BeginInvoke((Action)(() => AppendLog(line))); return; }
         Directory.CreateDirectory(Path.Combine(root.Text,"logs"));
         File.AppendAllText(Path.Combine(root.Text,"logs","interface-"+DateTime.Today.ToString("yyyyMMdd")+".log"),DateTimeOffset.Now.ToString("O")+" "+line+Environment.NewLine);
-        if(line.StartsWith("PLANEJAMENTO=",StringComparison.Ordinal) && Guid.TryParseExact(line[13..].Trim(),"N",out var preparing))preparingJobId=preparing.ToString("N");
+        if(line.StartsWith("PLANEJAMENTO=",StringComparison.Ordinal) && Guid.TryParseExact(line[13..].Trim(),"N",out var preparing))
+        {preparingJobId=preparing.ToString("N");LastExecution.Save(root.Text,preparingJobId);}
         if(line.StartsWith("FLUXO=",StringComparison.Ordinal))
         {try{if(JsonSerializer.Deserialize<WorkflowInfo>(line[6..],UiRules.Json) is { } data)ApplyWorkflowProgress(data,true);}catch(JsonException){}return;}
         if(workflowRunning)return;
@@ -295,12 +296,12 @@ internal sealed partial class MainForm : Form
         { activeRoot = directory; jobs.Items.Clear(); stateGrid.DataSource = null; volumeGrid.DataSource = null; errorGrid.DataSource = null; summary.Text = "Nenhuma execução nesta pasta. Selecione a origem e prepare o primeiro arquivamento."; activity.Text = "Pasta pronta para um novo arquivamento."; return; }
         var result = await statusEngine.RunAsync(["archive-status", directory]); EnsureSuccess(result);
         var data = JsonSerializer.Deserialize<List<JobStatus>>(result.Output, UiRules.Json) ?? [];
-        string? current = selectId ?? (jobs.SelectedItem as JobStatus)?.Id;
+        string? current = (jobs.SelectedItem as JobStatus)?.Id;
         activeRoot = directory; loadingJobs = true;
         try
         {
             jobs.Items.Clear(); jobs.Items.AddRange(data.OrderByDescending(x => x.CreatedUtc).Cast<object>().ToArray());
-            if (jobs.Items.Count > 0) jobs.SelectedItem = jobs.Items.Cast<JobStatus>().FirstOrDefault(x => x.Id == current) ?? jobs.Items.Cast<JobStatus>().FirstOrDefault(x=>x.PlanningPending||WizardRules.CanContinue(x.States)) ?? jobs.Items[0];
+            if (jobs.Items.Count > 0) jobs.SelectedItem=LastExecution.Select(jobs.Items.Cast<JobStatus>(),selectId,current,LastExecution.Read(directory));
         }
         finally { loadingJobs = false; }
         ShowSelectedJob();
@@ -325,7 +326,7 @@ internal sealed partial class MainForm : Form
     }
     private void ShowSelectedJob()
     {
-        if (jobs.SelectedItem is JobStatus job) ShowJob(job);
+        if (jobs.SelectedItem is JobStatus job){ShowJob(job);LastExecution.Save(root.Text,job.Id);}
         else { displayedJob = null; summary.Text = "Nenhuma execução selecionada."; stateGrid.DataSource = null; volumeGrid.DataSource = null; errorGrid.DataSource = null; }
         UpdateActions();
     }

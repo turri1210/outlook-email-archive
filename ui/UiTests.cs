@@ -78,6 +78,7 @@ internal static class UiTests
             string json = "[{\"Id\":\"0123456789abcdef0123456789abcdef\",\"CreatedUtc\":\"2026-10-26T12:00:00Z\",\"SourceLabel\":\"Caixa > Recebidos\",\"States\":{\"Verified\":3,\"SkippedDraft\":1},\"Volumes\":[]}]";
             var jobs = JsonSerializer.Deserialize<List<JobStatus>>(json, UiRules.Json)!;
             CancellationTests(Check);
+            LastExecutionTests(Check);
             Check(jobs[0].States.Values.Sum() == 4 && jobs[0].SourceLabel == "Caixa > Recebidos", "Contrato do histórico inválido.");
             using var form = new MainForm();
             form.CreateControl();
@@ -196,6 +197,29 @@ internal static class UiTests
         string chosen=Path.Combine(folder,"novo.pst");check(WizardRules.ValidateNewPst(chosen)==chosen,"Novo destino local rejeitado.");File.WriteAllText(chosen,"fixture");
         try{WizardRules.ValidateNewPst(chosen);throw new Exception("PST existente aceito como novo.");}catch(ArgumentException){check(true,"Colisão rejeitada.");}
         File.Delete(chosen);Directory.Delete(folder);
+    }
+    private static void LastExecutionTests(Action<bool,string> check)
+    {
+        var ready=new JobStatus{Id=Guid.NewGuid().ToString("N"),States=new(){{"Copied",99},{"Planned",37972}}};
+        var duplicate=new JobStatus{Id=Guid.NewGuid().ToString("N"),PlanningPending=true,PlanningAnalyzed=576,PlanningTotal=38071};
+        var rows=new[]{duplicate,ready};
+        check(LastExecution.Select(rows,null,null,ready.Id)==ready,"Reabrir selecionou planejamento duplicado em vez da execução lembrada.");
+        check(LastExecution.Select(rows,duplicate.Id,null,ready.Id)==duplicate,"Seleção explícita foi substituída pela preferência.");
+        check(LastExecution.Select(rows,null,ready.Id,duplicate.Id)==ready,"Atualizar histórico trocou a execução atual.");
+        string directory=Path.Combine(Path.GetTempPath(),"archive-selection-"+Guid.NewGuid().ToString("N"));
+        try
+        {
+            LastExecution.Save(directory,ready.Id);check(LastExecution.Read(directory)==ready.Id,"A execução selecionada não persistiu.");
+            LastExecution.Save(directory,"invalid");check(LastExecution.Read(directory)==ready.Id,"Identidade inválida apagou a preferência válida.");
+            File.WriteAllText(Path.Combine(directory,"preferences","last-execution.json"),"invalid JSON");
+            check(LastExecution.Read(directory) is null,"Preferência danificada bloqueou a abertura.");
+        }
+        finally
+        {
+            File.Delete(Path.Combine(directory,"preferences","last-execution.json"));
+            Directory.Delete(Path.Combine(directory,"preferences"));Directory.Delete(directory);
+        }
+        check(ready.ToString().Contains("plano preparado") && duplicate.ToString().Contains("planejamento incompleto"),"A lista não distingue plano pronto de planejamento incompleto.");
     }
     private static void LargeHistory(Action<bool, string> check)
     {

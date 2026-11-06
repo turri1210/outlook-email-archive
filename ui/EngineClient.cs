@@ -135,7 +135,7 @@ internal sealed class JobStatus
     public Dictionary<string, int> States { get; set; } = [];
     public List<VolumeStatus> Volumes { get; set; } = [];
     public List<JobError> Errors { get; set; } = [];
-    public override string ToString() => $"{CreatedUtc.ToLocalTime():dd/MM/yyyy HH:mm} · {SourceLabel??Id[..Math.Min(8,Id.Length)]} · {(PlanningPending?"planejamento interrompido":CutoffDateInclusive is { } cutoff?$"até {cutoff:dd/MM/yyyy}":"todos os e-mails")} · {Id[..Math.Min(8,Id.Length)]}";
+    public override string ToString() => $"{CreatedUtc.ToLocalTime():dd/MM/yyyy HH:mm} · {SourceLabel??Id[..Math.Min(8,Id.Length)]} · {(PlanningPending?$"planejamento incompleto: {PlanningAnalyzed:N0}/{PlanningTotal:N0}":$"plano preparado: {States.Values.Sum():N0} itens")} · {(CutoffDateInclusive is { } cutoff?$"até {cutoff:dd/MM/yyyy}":"todos os e-mails")} · {Id[..Math.Min(8,Id.Length)]}";
 }
 internal sealed class JobError
 {
