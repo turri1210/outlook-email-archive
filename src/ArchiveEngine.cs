@@ -123,6 +123,7 @@ internal sealed partial class ArchiveEngine : IDisposable
         if (backend is IArchiveBatchBackend native && !CopyNativeBatches(job, config, native)) { Status(jobId); return; }
         foreach (var row in WorkItems(jobId))
         {
+            using var itemTiming=ArchiveOperationTiming.Measure("item.copy",row.Key[..12]);
             if (row.NativeBatchId is not null) continue;
             if (row.State is not (ArchiveItemState.Planned or ArchiveItemState.Exported or ArchiveItemState.ImportStarted or ArchiveItemState.Copied)) continue;
             // Only this invocation can know that Import has not been attempted.

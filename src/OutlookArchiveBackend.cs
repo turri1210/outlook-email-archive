@@ -231,6 +231,7 @@ internal sealed partial class OutlookArchiveBackend : IArchiveBackend, IArchiveR
     }
     public ArchiveSnapshot Export(ArchiveItem item, string evidenceDirectory)
     {
+        using var timing=ArchiveOperationTiming.Measure("source.export");
         object? source = null;
         try { source = OpenSource(item, item.SourceEntryId, item.SourceFolderId, item.SourceRecordKey); return Snapshot(source, evidenceDirectory, true, item.RepairToken is not null); }
         finally { Release(source); }
@@ -260,6 +261,7 @@ internal sealed partial class OutlookArchiveBackend : IArchiveBackend, IArchiveR
     }
     public ArchiveSnapshot BackupSnapshot(ArchiveItem item, string evidenceDirectory)
     {
+        using var timing=ArchiveOperationTiming.Measure("backup.read");
         if(ArchiveEvidenceLease.TryBackup(item,out var retained))return retained;
         object? source = null;
         string working = Path.Combine(evidenceDirectory, "opened.msg");
@@ -276,8 +278,8 @@ internal sealed partial class OutlookArchiveBackend : IArchiveBackend, IArchiveR
             if (ArchiveFiles.Sha(serialized) != before) throw new ArchiveReviewException("Backup mudou durante a leitura.");
             File.Copy(serialized, working, false);
             if(ArchiveFiles.Sha(working)!=before)throw new ArchiveReviewException("Cópia de trabalho do backup não confere.");
-            source = ((dynamic)session!).OpenSharedItem(working);
-            PilotCommand.Snapshot(source, evidenceDirectory, serialized);
+            using(ArchiveOperationTiming.Measure("backup.open-shared-msg"))source = ((dynamic)session!).OpenSharedItem(working);
+            using(ArchiveOperationTiming.Measure("backup.fields-attachments"))PilotCommand.Snapshot(source, evidenceDirectory, serialized);
             var fields = ArchiveFiles.ReadFields(Path.Combine(evidenceDirectory, "field-hashes.json"));
             var relevant = RelevantMessageValidation.Generate(source, serialized, evidenceDirectory, recoveryBodyContext: item.RepairToken is not null);
             CleanupAttachments(evidenceDirectory);
@@ -296,14 +298,16 @@ internal sealed partial class OutlookArchiveBackend : IArchiveBackend, IArchiveR
     }
     private static ArchiveSnapshot Snapshot(object item, string directory, bool keepMessage, bool recoveryBodyContext = false)
     {
+        using var timing=ArchiveOperationTiming.Measure("snapshot.total");
         if (Directory.Exists(directory)) throw new IOException("Diretório de evidência já existe.");
         Directory.CreateDirectory(directory);
         string? before = BinaryProperty(item, "0x65E20102");
         string msg = Path.Combine(directory, "message.msg");
-        ((dynamic)item).SaveAs(msg, 9);
+        using(ArchiveOperationTiming.Measure("snapshot.save-msg"))((dynamic)item).SaveAs(msg, 9);
         using (var file = new FileStream(msg, FileMode.Open, FileAccess.ReadWrite, FileShare.Read)) file.Flush(true);
-        PilotCommand.Snapshot(item, directory, msg);
-        var relevant = RelevantMessageValidation.Generate(item, msg, directory, recoveryBodyContext: recoveryBodyContext);
+        using(ArchiveOperationTiming.Measure("snapshot.fields-attachments"))PilotCommand.Snapshot(item, directory, msg);
+        Dictionary<string,string>? relevant;
+        using(ArchiveOperationTiming.Measure("snapshot.relevant-profile"))relevant = RelevantMessageValidation.Generate(item, msg, directory, recoveryBodyContext: recoveryBodyContext);
         string? after = BinaryProperty(item, "0x65E20102");
         if (before != after) throw new ArchiveReviewException("ChangeKey da mensagem mudou durante a conferência.");
         var result = new ArchiveSnapshot(ArchiveFiles.ReadFields(Path.Combine(directory, "field-hashes.json")), msg, ArchiveFiles.Sha(msg), after, relevant);
@@ -410,6 +414,7 @@ internal sealed partial class OutlookArchiveBackend : IArchiveBackend, IArchiveR
     }
     public void AttachVolume(ArchiveVolume volume)
     {
+        using var timing=ArchiveOperationTiming.Measure("pst.attach-and-check");
         LockPst(volume.PstPath);
         if (!File.Exists(volume.PstPath)) throw new FileNotFoundException("PST registrado está ausente; substituição automática bloqueada.");
         if (attached.TryGetValue(volume.PstPath, out var cached)) { volume.StoreId = cached; return; }
@@ -431,6 +436,7 @@ internal sealed partial class OutlookArchiveBackend : IArchiveBackend, IArchiveR
     public long MeasureVolume(ArchiveVolume volume) => new FileInfo(volume.PstPath).Length;
     public TokenLookup FindToken(ArchiveVolume volume, ArchiveItem item)
     {
+        using var timing=ArchiveOperationTiming.Measure("target.find-token");
         AttachVolume(volume);
         object? folder = null, store = null, root = null;
         try
@@ -490,6 +496,7 @@ internal sealed partial class OutlookArchiveBackend : IArchiveBackend, IArchiveR
     }
     public DestinationIdentity Import(ArchiveVolume volume, ArchiveItem item)
     {
+        using var timing=ArchiveOperationTiming.Measure("target.import");
         if(item.SourceMessageClass==DeliveryReportEvidence.MessageClass)throw new ArchiveReviewException("Avisos de falha exigem a cópia nativa; conversão por MSG bloqueada para preservar o relatório.");
         AttachVolume(volume);
         object? folder = null, staged = null, imported = null;
@@ -498,9 +505,9 @@ internal sealed partial class OutlookArchiveBackend : IArchiveBackend, IArchiveR
         {
             folder = TargetFolder(volume, item.RelativePath, true)!;
             File.Copy(item.StageMsgPath!, working, false); // Immutable backup is never tagged or saved by Outlook.
-            staged = ((dynamic)session!).OpenSharedItem(working);
+            using(ArchiveOperationTiming.Measure("import.open-shared-msg"))staged = ((dynamic)session!).OpenSharedItem(working);
             SetProperty(staged, TokenProperty, item.DestinationToken); // Local MSG object only, never an original.
-            imported = ((dynamic)staged).Move(folder);
+            using(ArchiveOperationTiming.Measure("import.move-copy-to-pst"))imported = ((dynamic)staged).Move(folder);
             var identity = new DestinationIdentity(volume.StoreId!, (string)((dynamic)folder).EntryID, (string)((dynamic)imported).EntryID);
             object? importedParent = null;
             try
@@ -509,7 +516,7 @@ internal sealed partial class OutlookArchiveBackend : IArchiveBackend, IArchiveR
                 if ((string)((dynamic)importedParent).StoreID != volume.StoreId || (string)((dynamic)importedParent).EntryID != identity.FolderId || identity.EntryId == item.SourceEntryId)
                     throw new ArchiveReviewException("Gravação de identidade bloqueada fora da cópia de destino.");
                 SetProperty(imported, TokenProperty, item.DestinationToken);
-                ((dynamic)imported).Save(); // PropertyAccessor edits must be committed on the STORED copy.
+                using(ArchiveOperationTiming.Measure("import.save-token"))((dynamic)imported).Save(); // Commit the STORED copy.
             }
             finally { Release(importedParent); }
             if (tokenIndexes.TryGetValue(volume.PstPath, out var index))
@@ -531,6 +538,7 @@ internal sealed partial class OutlookArchiveBackend : IArchiveBackend, IArchiveR
     }
     public ArchiveSnapshot TargetSnapshot(ArchiveVolume volume, ArchiveItem item, DestinationIdentity identity, string evidenceDirectory, bool requireToken = true)
     {
+        using var timing=ArchiveOperationTiming.Measure("target.snapshot");
         AttachVolume(volume); object? copy = null, parent = null;
         try
         {

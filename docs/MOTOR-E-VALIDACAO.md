@@ -1,5 +1,25 @@
 # Motor, validação e retomada
 
+## Diagnóstico detalhado de desempenho
+
+`archive-performance-audit <raiz> <execução> <nova-pasta-local>` exige a operação
+parada e o bloqueio exclusivo do catálogo. O comando executa e registra **três
+cópias reais pendentes do plano existente**, sem mover os originais; depois faz
+leituras de uma amostra de até 12 divergências. Não é um comando inteiramente
+somente leitura. Ele não aprova divergências nem altera as regras de remoção.
+
+`timings.jsonl` registra tempos hierárquicos da exportação MSG, metadados/anexos,
+perfil do corpo, importação no PST, leitura de destino e catálogo. Os totais já
+incluem seus componentes, portanto não se devem somar ambos. A instrumentação
+fica desativada fora da sessão de diagnóstico. A pasta de diagnóstico pode
+conter cópias temporárias de e-mails e deve permanecer em armazenamento privado.
+
+`archive-performance-self-test` valida a hierarquia das medições e o limite de
+três cópias com originais preservados, usando somente dados artificiais.
+`tools/audit_archive_divergences.py <raiz> <execução> <relatório.json>` consulta
+o catálogo em modo somente leitura e compara os nomes dos campos divergentes
+nos perfis já salvos, sem aprovar ou modificar mensagens.
+
 ## Separação entre interface e Outlook
 
 A interface WinForms inicia processos do motor C#/.NET com argumentos separados, sem montar comandos de shell a partir dos campos do usuário. O motor se conecta à sessão COM já aberta do Outlook clássico, no mesmo usuário e nível de permissão. Ele não inicia outro perfil, não usa o novo Outlook e não solicita senha de e-mail. As operações sobre Outlook/PST são sequenciais em STA.

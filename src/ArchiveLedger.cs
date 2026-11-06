@@ -157,6 +157,7 @@ internal sealed partial class ArchiveLedger : IDisposable
     }
     internal void UpdateItem(ArchiveItem item)
     {
+        using var timing=ArchiveOperationTiming.Measure("catalog.update-item");
         var old = GetItem(item.Key) ?? throw new KeyNotFoundException("Item não registrado.");
         if (old.JobId != item.JobId || old.Token != item.Token || old.SourceStoreId != item.SourceStoreId || old.SourceEntryId != item.SourceEntryId ||
             old.NativeBatchId != item.NativeBatchId ||

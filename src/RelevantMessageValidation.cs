@@ -152,12 +152,13 @@ internal static partial class RelevantMessageValidation
             bool report = DeliveryReportEvidence.IsReport(item);
             var effectiveBudget=budget ?? new();
             bool reportContext=report || deliveryReportContext;
-            var metadata = report ? DeliveryReportEvidence.Metadata(messagePath) : ReadMetadata(item);
+            Dictionary<string,string> metadata;
+            using(ArchiveOperationTiming.Measure("relevant.read-metadata"))metadata = report ? DeliveryReportEvidence.Metadata(messagePath) : ReadMetadata(item);
             var fields = new Dictionary<string, string> { ["ProfileVersion"] = ProfileVersion, ["BodyMode"] = "unsupported-v1" };
             try
             {
                 JsonElement result;
-                lock (Gate) result = Query(new { Operation = "profile", Path = Path.GetFullPath(messagePath), ReportEquivalence = reportContext || recoveryBodyContext, RepairEquivalence = recoveryBodyContext });
+                using(ArchiveOperationTiming.Measure("relevant.python-profile"))lock (Gate) result = Query(new { Operation = "profile", Path = Path.GetFullPath(messagePath), ReportEquivalence = reportContext || recoveryBodyContext, RepairEquivalence = recoveryBodyContext });
                 if (result.GetProperty("Supported").GetBoolean())
                     fields = result.GetProperty("Fields").Deserialize<Dictionary<string, string>>() ?? throw new InvalidDataException("Perfil de corpo ausente.");
             }
