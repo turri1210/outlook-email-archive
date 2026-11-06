@@ -62,7 +62,7 @@ internal sealed partial class ArchiveEngine
                     continue;
                 }
                 ledger.SetWorkflowState(jobId,batch.Number,"Running");Report("Copiando as mensagens do lote",true);
-                if(rows.Any(x=>x.State is ArchiveItemState.Planned or ArchiveItemState.Exported or ArchiveItemState.ImportStarted))Copy(jobId);
+                if(rows.Any(x=>x.State is ArchiveItemState.Planned or ArchiveItemState.Exported or ArchiveItemState.ImportStarted))Copy(jobId,moveInline:move,allowRetainedBackup:allowRetainedBackup);
                 Report("Validando as cópias e concluindo o lote",true);
                 Verify(jobId,allowRetainedBackup:allowRetainedBackup,pendingOnly:true,moveValidatedToDeletedItems:move);
                 rows=WorkItems(jobId);string state=WorkflowPlan.Classify(rows,move);

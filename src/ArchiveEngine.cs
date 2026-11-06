@@ -116,10 +116,11 @@ internal sealed partial class ArchiveEngine : IDisposable
                 Console.WriteLine($"Planejamento: catálogo — {registered:N0}/{rows.Count:N0} identidades registradas ou conferidas.");
         }
     }
-    internal void Copy(string jobId)
+    internal void Copy(string jobId,bool moveInline=false,bool allowRetainedBackup=false)
     {
         if(workflowSelection is null && ledger.WorkflowManifest(jobId) is not null)throw new ArchiveReviewException("Esta execução usa lotes. Use Continuar arquivamento para manter seus checkpoints.");
         var job = ledger.GetJob(jobId); var config = Envelope(job).Config; if(workflowSelection is null)SealPlan(job); UpgradeDeliveryReports(job,config);
+        if(allowRetainedBackup)config.AllowRetainedMsgBackupForRemoval=true;
         if (backend is IArchiveBatchBackend native && !CopyNativeBatches(job, config, native)) { Status(jobId); return; }
         foreach (var row in WorkItems(jobId))
         {
@@ -130,12 +131,14 @@ internal sealed partial class ArchiveEngine : IDisposable
             // A persisted ImportStarted on resume remains ambiguous even when
             // a lookup finds no token, so it must retain recovery safeguards.
             bool freshImportIntent = false;
+            ArchiveSnapshot? freshSource=null,freshTarget=null;
             try
             {
                 if (row.State == ArchiveItemState.Planned)
                 {
                     CheckSpace(row.EstimatedBytes, config);
                     var original = backend.Export(row, Evidence(job, row, "original"));
+                    freshSource=original;
                     row.StageMsgPath = ArchiveFiles.Child(job.RootDirectory, original.MessagePath);
                     row.StageMsgSha256 = original.MessageSha256; row.SnapshotHash = original.Hash;
                     row.SourceChangeKey = original.ChangeKey;
@@ -176,6 +179,7 @@ internal sealed partial class ArchiveEngine : IDisposable
                 if (row.TargetSnapshotHash is null)
                 {
                     var copy = backend.TargetSnapshot(targetVolume, row, found, Evidence(job, row, "target-baseline"));
+                    freshTarget=copy;
                     row.TargetSnapshotHash = copy.Hash;
                     row.TargetFieldsPath = Path.Combine(Path.GetDirectoryName(copy.MessagePath)!, "field-hashes.json");
                     SaveRelevantTarget(row, copy);
@@ -189,6 +193,8 @@ internal sealed partial class ArchiveEngine : IDisposable
                 }
                 ledger.UpdateVolume(targetVolume);
                 Console.WriteLine($"Cópia registrada: {row.Key[..12]}, parte {targetVolume.Number}.");
+                if(moveInline && config.AllowRetainedMsgBackupForRemoval && freshSource is not null && freshTarget is not null)
+                    VerifyFreshCopyAndMove(job,row,targetVolume,config,freshSource,freshTarget);
                 workflowProgress?.Invoke();
             }
             catch (ArchiveInjectedCrashException) { throw; }
@@ -612,11 +618,17 @@ internal sealed partial class ArchiveEngine : IDisposable
         ArchiveConfig config, DiskRoundtrip disk, bool forRemoval, SourceLocation? location = null)
     {
         CheckBackupFile(job, row);
-        var original = Original(job, row); var baseline = TargetBaseline(job, row);
         var source = backend.SourceSnapshot(row, location, Evidence(job, row, "source-current"));
         var backup = backend.BackupSnapshot(row, Evidence(job, row, "backup-check"));
         var identity = Unique(volume, row);
         var target = backend.TargetSnapshot(volume, row, identity, Evidence(job, row, "target-current"));
+        return EvaluatePrepared(job,row,volume,config,disk,forRemoval,location,source,backup,target,identity:identity);
+    }
+    private (ValidationResult Result, ArchiveSnapshot Source, ArchiveSnapshot Target) EvaluatePrepared(ArchiveJob job,ArchiveItem row,ArchiveVolume volume,
+        ArchiveConfig config,DiskRoundtrip disk,bool forRemoval,SourceLocation? location,ArchiveSnapshot source,ArchiveSnapshot backup,ArchiveSnapshot target,bool immediateTrash=false,DestinationIdentity? identity=null)
+    {
+        var original=Original(job,row);var baseline=TargetBaseline(job,row);
+        identity??=new DestinationIdentity(row.TargetStoreId!,row.TargetFolderId!,row.TargetEntryId!);
         bool backupValid = RecordedBackupMatches(job, row, backup);
         bool expectedFolder = location is null || location.FolderId == row.SourceFolderId ||
             (location.InDeletedItems && row.State is ArchiveItemState.DeleteStarted or ArchiveItemState.InDeletedItems or ArchiveItemState.PurgeStarted);
@@ -630,6 +642,8 @@ internal sealed partial class ArchiveEngine : IDisposable
             DestinationIsVerifiedLocalPst = true, DestinationBelongsToJob = true,
             DestinationReopenedAndExclusiveRead = disk.Reopened && disk.ExclusiveDiskRead,
             DestinationReopenedAndRevalidated = disk.Reopened,
+            DestinationStoredItemReadBack=immediateTrash,
+            TrashOnly=immediateTrash,
             IndependentMsgBackupValidated = config.AllowRetainedMsgBackupForRemoval && backupValid,
             StagingMsgHashMatches = backupValid, SourceStillInExpectedFolder = expectedFolder,
             SourceIsSupportedSentMessage = true, ImportIdentityIsUnique = true,
@@ -637,7 +651,7 @@ internal sealed partial class ArchiveEngine : IDisposable
         };
         var result = ArchiveValidation.Evaluate(request);
         ArchiveFiles.WriteNew(Path.Combine(Path.GetDirectoryName(target.MessagePath)!, "validation.json"), new
-        { Utc = DateTimeOffset.UtcNow, result, disk, BackupValidated = backupValid, BackupFallbackExplicitlyEnabled = config.AllowRetainedMsgBackupForRemoval });
+        { Utc = DateTimeOffset.UtcNow, result, disk, BackupValidated = backupValid, BackupFallbackExplicitlyEnabled = config.AllowRetainedMsgBackupForRemoval,ImmediateTrashReadback=immediateTrash });
         return (result, source, target);
     }
     private void SaveRemovalProof(ArchiveJob job, ArchiveItem row, string sourceHash, string targetHash)

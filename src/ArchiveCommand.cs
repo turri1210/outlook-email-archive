@@ -25,6 +25,7 @@ internal static class ArchiveCommand
             if(args[0]=="archive-planning-self-test" && args.Length==1)return ArchivePlanningTests.Run();
             if(args[0]=="archive-transport-self-test" && args.Length==1)return NativeStoreAccess.SelfTest();
             if(args[0]=="archive-performance-self-test" && args.Length==1)return ArchivePerformanceAudit.SelfTest();
+            if(args[0]=="archive-immediate-self-test" && args.Length==1)return ArchiveImmediateTests.Run();
             if(args[0]=="archive-performance-audit" && args.Length==4)return ArchivePerformanceAudit.Run(args[1],args[2],args[3]);
             if(args[0]=="archive-source-transport-audit" && args.Length==3)
             {

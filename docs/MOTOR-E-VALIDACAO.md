@@ -1,5 +1,26 @@
 # Motor, validação e retomada
 
+## Conferência imediata no transporte individual
+
+Quando o movimento automático e a prova adicional MSG retida estão autorizados,
+o fluxo reutiliza os snapshots produzidos na exportação e na leitura da cópia
+gravada no PST. A leitura do destino reabre o item persistido pelo identificador
+e confere seu token, armazenamento e pasta. O MSG retido permanece protegido contra
+escrita/exclusão enquanto seu SHA-256 é calculado em paralelo com a consulta do
+ChangeKey da origem. Apenas arquivos locais passam pela thread de trabalho.
+
+O novo atestado de leitura do item armazenado, combinado com MSG independente
+íntegro, é válido somente para mover a Itens Excluídos. Não autoriza exclusão
+definitiva. A validação de conteúdo, destinatários, datas e anexos permanece
+obrigatória. O backend ainda confere o ChangeKey e o conteúdo após gravar o
+marcador de recuperação e antes de mover. Aprovação e intenção são persistidas
+antes da movimentação. Uma interrupção descarta os atalhos em memória: a retomada
+usa as evidências duráveis e a conferência integral existente.
+
+`archive-immediate-self-test` verifica fluxo normal, ChangeKey ausente, retomada
+após movimento, origem/destino alterados, MSG adulterado e ausência de autorização,
+com mensagens artificiais. O transporte nativo em lote mantém suas regras próprias.
+
 ## Diagnóstico detalhado de desempenho
 
 `archive-performance-audit <raiz> <execução> <nova-pasta-local>` exige a operação

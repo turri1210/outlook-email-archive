@@ -37,7 +37,7 @@ internal sealed partial class MainForm
         if(action==ContinueAction.None)return;
         if(action==ContinueAction.Remove){await Remove();return;}
         workflowRunning=true;batchPauseRequested=false;
-        try{await Execute("archive-workflow-run","Conferindo o Outlook, os PSTs e os lotes pendentes…");}
+        try{await Execute("archive-workflow-run","Conferindo o Outlook, os PSTs e os lotes pendentes…",reconcilePending:action==ContinueAction.Reconcile);}
         finally{workflowRunning=false;UpdateActions();}
     }
     private async Task ResumePreparation(JobStatus job)

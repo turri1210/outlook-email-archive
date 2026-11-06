@@ -373,7 +373,7 @@ internal sealed partial class MainForm : Form
         try { string folder=Path.Combine(root.Text,"reports");Directory.CreateDirectory(folder);string file=Path.Combine(folder,$"pendencias-{job.Id[..8]}-{DateTime.Now:yyyyMMdd-HHmmss}.csv"); File.WriteAllText(file, UiRules.PendingReport(job), new System.Text.UTF8Encoding(true)); activity.Text = "Relatório salvo em emailArchive\\reports."; }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { MessageBox.Show(this, ex.Message, "Não foi possível salvar o relatório", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
     }
-    private async Task Execute(string command, string message)
+    private async Task Execute(string command, string message,bool reconcilePending=false)
     {
         if (jobs.SelectedItem is not JobStatus job || activeRoot is null) return;
         string directory = activeRoot;
@@ -385,7 +385,7 @@ internal sealed partial class MainForm : Form
                 arguments=[..arguments,"--allow-retained-msg-backup"];
             if(command is "archive-run" or "archive-verify" or "archive-workflow-run")
                 arguments=[..arguments,autoMoveCurrent.Checked ? "--move-validated-to-trash" : "--keep-originals"];
-            if(command=="archive-workflow-run")arguments=[..arguments,"--reconcile-pending"];
+            if(command=="archive-workflow-run" && reconcilePending)arguments=[..arguments,"--reconcile-pending"];
             var result = await engine.RunAsync(arguments, AppendLog);
             if (result.WasInterrupted) throw new EngineInterruptedException();
             await WaitForStatusPoll(); await RefreshJobs(job.Id);

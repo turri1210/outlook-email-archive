@@ -49,7 +49,8 @@ internal static class ArchiveValidation
             "source_target_identities_not_distinct");
 
         Require(request.DestinationIsVerifiedLocalPst, "destination_not_verified_local_pst");
-        Require(request.DestinationReopenedAndExclusiveRead || (request.IndependentMsgBackupValidated && request.DestinationReopenedAndRevalidated), "destination_durable_reopen_or_independent_backup_missing");
+        Require(request.DestinationReopenedAndExclusiveRead || (request.IndependentMsgBackupValidated &&
+            (request.DestinationReopenedAndRevalidated || request.DestinationStoredItemReadBack && request.TrashOnly)), "destination_durable_reopen_or_independent_backup_missing");
         Require(request.DestinationBelongsToJob, "destination_not_owned_by_job");
         Require(request.SourceStillInExpectedFolder, "source_not_in_expected_folder");
         Require(request.SourceIsSupportedSentMessage, "source_not_supported_sent_message");
@@ -149,6 +150,11 @@ internal static class ArchiveValidation
 
         var good = Good();
         if (!Evaluate(good).AllowedToRemove) throw new Exception("Evidência completa válida foi bloqueada.");
+        var immediate=good with {DestinationReopenedAndExclusiveRead=false,DestinationReopenedAndRevalidated=false,IndependentMsgBackupValidated=true,DestinationStoredItemReadBack=true,TrashOnly=true};
+        if(!Evaluate(immediate).AllowedToRemove)throw new Exception("Leitura recém-gravada com backup MSG íntegro foi bloqueada para Itens Excluídos.");
+        Block(immediate with{TrashOnly=false},"leitura direta para exclusão definitiva");
+        Block(immediate with{IndependentMsgBackupValidated=false},"leitura direta sem backup MSG íntegro");
+        Block(immediate with{StagingMsgHashMatches=false},"leitura direta com MSG alterado");
         var automatic=Copy(good.SourceOriginal!);automatic["MessageClass"]=Hash(DeliveryReportEvidence.AutomaticReplyClass);
         var automaticRequest=good with {SourceOriginal=automatic,SourceCurrent=automatic,TargetBaseline=automatic,TargetCurrent=automatic};
         if(!Evaluate(automaticRequest).AllowedToRemove)throw new Exception("Resposta automática íntegra bloqueada.");
@@ -259,6 +265,8 @@ internal sealed record ValidationRequest
     public bool DestinationReopenedAndExclusiveRead { get; init; }
     public bool IndependentMsgBackupValidated { get; init; }
     public bool DestinationReopenedAndRevalidated { get; init; }
+    public bool DestinationStoredItemReadBack {get;init;}
+    public bool TrashOnly {get;init;}
     public bool DestinationBelongsToJob { get; init; }
     public bool SourceStillInExpectedFolder { get; init; }
     public bool SourceIsSupportedSentMessage { get; init; }

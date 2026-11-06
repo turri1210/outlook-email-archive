@@ -27,6 +27,12 @@ internal sealed class ArchiveEvidenceLease : IDisposable
         hash="";return false;
     }
     internal static bool Guards(string file)=>current is {disposed:false} lease && string.Equals(Path.GetFullPath(file),lease.path,StringComparison.OrdinalIgnoreCase);
+    internal static void RememberVerifiedHash(string file,string hash)
+    {
+        if(current is not {disposed:false} lease || !Guards(file) || hash.Length!=64 || !hash.All(Uri.IsHexDigit))throw new ArchiveReviewException("Hash sem proteção de leitura válida.");
+        if(lease.sha is not null && lease.sha!=hash)throw new ArchiveReviewException("Hash da evidência protegida divergiu.");
+        lease.sha=hash;
+    }
     internal static bool TryBackup(ArchiveItem item,out ArchiveSnapshot snapshot)
     {
         if(current is {disposed:false,backup:not null} lease && string.Equals(Path.GetFullPath(item.StageMsgPath!),lease.path,StringComparison.OrdinalIgnoreCase) && lease.backup.MessageSha256==item.StageMsgSha256)

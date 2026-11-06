@@ -75,7 +75,16 @@ O plano inicial permanece congelado. O manifesto `jobs/<execução>/workflow/man
 
 Continuar arquivamento confere a conexão com o Outlook clássico, a presença dos PSTs, o acesso às pastas e a reserva de espaço. Depois processa somente os lotes abertos: copiar o que falta, validar as cópias e mover apenas os aprovados, quando autorizado. Lotes concluídos não têm seu conteúdo reaberto; consultas a índices e contagens continuam necessárias. Pendências ficam em lotes para revisão e não impedem o avanço nos demais.
 
-O botão também fica disponível quando só há itens para reconciliar ou remover. Ao acioná-lo, cada lote com pendências é reconciliado uma vez; os itens recuperados seguem para validação e movimento autorizado no mesmo fluxo. Divergências que persistirem continuam em Pendências, sem repetição automática. Os estados atuais das mensagens prevalecem sobre um checkpoint antigo do lote. Quando restar apenas remoção manual, Continuar abre a confirmação de remoção existente; a exclusão definitiva nunca é iniciada automaticamente.
+O botão também fica disponível quando só há itens para reconciliar ou remover. Enquanto houver cópias ou validações a executar, o programa prioriza esse trabalho e preserva as revisões antigas. Quando só restarem pendências, um novo acionamento reconcilia cada lote uma vez; os itens recuperados seguem para validação e movimento autorizado. Divergências que persistirem continuam em Pendências, sem repetição automática. Os estados atuais das mensagens prevalecem sobre um checkpoint antigo do lote. Quando restar apenas remoção manual, Continuar abre a confirmação existente; a exclusão definitiva nunca é iniciada automaticamente.
+
+No transporte individual, com movimento automático e prova MSG retida autorizados,
+novas mensagens são copiadas, conferidas e movidas para Itens Excluídos na mesma
+passagem. A primeira leitura do original e a primeira leitura da cópia armazenada
+são reaproveitadas. Um ChangeKey ausente ou diferente exige nova leitura da origem.
+O hash do MSG local é calculado em paralelo com a consulta ao Outlook, mantendo o
+arquivo protegido contra alterações. As chamadas ao Outlook permanecem na mesma
+thread. Mensagens divergentes ficam na origem; itens retomados sem evidência em
+memória passam pela conferência completa. Lotes nativos mantêm seu protocolo.
 
 Pausar após este lote cria uma solicitação local que o motor reconhece depois de gravar o checkpoint do lote. Interromper continua disponível para parar imediatamente; nesse caso a retomada usa as intenções por mensagem do lote interrompido. Falhas que deixam itens sem processamento interrompem o fluxo com erro, sem repetição em ciclo. O usuário retoma após corrigir a causa.
 
