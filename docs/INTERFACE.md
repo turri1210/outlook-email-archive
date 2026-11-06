@@ -29,6 +29,17 @@ Copie a pasta publicada inteira. Ela contém o executável da interface, suas de
 
 ## Fluxo por lotes
 
+### Origem indisponível no componente nativo
+
+Se o componente de leitura nativa falhar antes de abrir qualquer mensagem com
+`0x8004011D`, a ferramenta confirma se o próprio Outlook consegue abrir exatamente
+o mesmo armazenamento. Nesse caso, mensagens sem lote nativo iniciado seguem pelo
+transporte individual com backup MSG. Ele pode ser mais lento e mantém as mesmas
+exigências de identidade, integridade, persistência e validação antes de mover
+originais. Lotes já iniciados não são reenviados pelo transporte alternativo.
+Avisos de falha que exigem transporte nativo permanecem pendentes se esse acesso
+estiver indisponível. Outros erros não habilitam automaticamente essa alternativa.
+
 ### Retomar a preparação
 
 Ao iniciar um planejamento, a execução é registrada antes da leitura dos e-mails.

@@ -12,6 +12,7 @@ internal sealed partial class OutlookArchiveBackend : IArchiveBatchBackend
 
     public bool CanBatch(ArchiveItem item)
     {
+        if(nativeUnavailableSourceStores.Contains(item.SourceStoreId))return false;
         // Automatic-reply templates use the conservative single-message path.
         if(item.SourceMessageClass==DeliveryReportEvidence.AutomaticReplyClass)return false;
         if (item.SourceMessageClass == DeliveryReportEvidence.MessageClass)

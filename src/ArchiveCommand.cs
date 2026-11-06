@@ -23,6 +23,15 @@ internal static class ArchiveCommand
             bool? autoMove=move ? true : keep ? false : null;
             if(args[0]=="archive-workflow-self-test" && args.Length==1)return ArchiveWorkflowTests.Run();
             if(args[0]=="archive-planning-self-test" && args.Length==1)return ArchivePlanningTests.Run();
+            if(args[0]=="archive-transport-self-test" && args.Length==1)return NativeStoreAccess.SelfTest();
+            if(args[0]=="archive-source-transport-audit" && args.Length==3)
+            {
+                using var auditLedger=new ArchiveLedger(Path.Combine(args[1],"archive.sqlite"),true);
+                var row=auditLedger.GetItems(args[2]).First(x=>x.State==ArchiveItemState.Planned && x.SourceMessageClass=="IPM.Note");
+                using var auditBackend=new OutlookArchiveBackend();auditBackend.RefreshSourceIdentities([row]);
+                bool native=auditBackend.CanBatch(row);var identity=auditBackend.CaptureSourceIdentity(row);
+                Console.WriteLine(JsonSerializer.Serialize(new{ReadOnly=true,SourceReadable=true,NativeBatchAvailable=native,IdentityFields=identity.Fields.Count}));return 0;
+            }
             if(args[0]=="archive-storage-self-test" && args.Length==1)return ArchiveStorageTests.Run();
             if(args[0]=="archive-source-index-audit" && args.Length==3)
             {

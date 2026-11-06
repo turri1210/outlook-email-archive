@@ -7,6 +7,7 @@ internal sealed partial class OutlookArchiveBackend : IArchiveBulkFastBatchBacke
     private sealed record BulkIdentity(FastMessageIdentity? Identity, bool CanBatch, string? Error);
     private readonly Dictionary<string, BulkIdentity> bulkSourceIdentities = new(StringComparer.Ordinal);
     private readonly Dictionary<string, BulkIdentity> bulkTargetIdentities = new(StringComparer.Ordinal);
+    private readonly HashSet<string> nativeUnavailableSourceStores=new(StringComparer.OrdinalIgnoreCase);
     private static string SourceBulkKey(ArchiveItem row) => row.SourceStoreId + "|" + row.SourceEntryId + "|" + row.SourceFolderId + "|" + row.SourceRecordKey;
     private static string TargetBulkKey(DestinationIdentity identity) => identity.StoreId + "|" + identity.FolderId + "|" + identity.EntryId;
     private static FastMessageIdentity RequireBulkIdentity(BulkIdentity result)
@@ -21,7 +22,25 @@ internal sealed partial class OutlookArchiveBackend : IArchiveBulkFastBatchBacke
         foreach (var group in rows.GroupBy(x => x.SourceStoreId))
         foreach (var chunk in group.Chunk(100))
         {
-            var result = ReadBulkIdentities(group.Key, chunk.Select(x => (x.SourceEntryId, x.SourceFolderId, x.SourceRecordKey)).ToArray());
+            if(nativeUnavailableSourceStores.Contains(group.Key))continue;
+            Dictionary<string,BulkIdentity> result;
+            try{result=ReadBulkIdentities(group.Key, chunk.Select(x => (x.SourceEntryId, x.SourceFolderId, x.SourceRecordKey)).ToArray());}
+            catch(NativeStoreAccessException)
+            {
+                // The helper is read-only and failed before opening a message.
+                // Prove that Outlook itself can open this exact source first.
+                object? store=null,folder=null;
+                try
+                {
+                    store=((dynamic)session!).GetStoreFromID(group.Key);folder=((dynamic)store).GetRootFolder();
+                    if(!SameIdentity((string)((dynamic)folder).StoreID,group.Key))throw new ArchiveReviewException("O Outlook retornou outro armazenamento de origem.");
+                    _=(string)((dynamic)folder).EntryID;
+                }
+                finally{Release(folder);Release(store);}
+                nativeUnavailableSourceStores.Add(group.Key);
+                Console.WriteLine("Cópia: esta origem está acessível pelo Outlook, mas não pelo componente nativo (0x8004011D). As mensagens sem lote iniciado usarão o transporte individual por MSG; validação e proteção dos originais permanecem obrigatórias.");
+                continue;
+            }
             foreach (var row in chunk) bulkSourceIdentities[SourceBulkKey(row)] = result.GetValueOrDefault(row.SourceEntryId)
                 ?? new(null, false, "Mensagem ausente da resposta nativa.");
         }
@@ -72,7 +91,7 @@ internal sealed partial class OutlookArchiveBackend : IArchiveBulkFastBatchBacke
             if (!process.Start()) throw new IOException("Não foi possível iniciar a identificação nativa.");
             var stdout = process.StandardOutput.ReadToEndAsync(); var stderr = process.StandardError.ReadToEndAsync();
             process.WaitForExit(); string json = stdout.GetAwaiter().GetResult(), errors = stderr.GetAwaiter().GetResult();
-            if (process.ExitCode != 0) throw new ArchiveReviewException("Falha na identificação nativa: " + errors.Trim());
+            if (process.ExitCode != 0) throw NativeStoreAccess.Failure(json,errors);
             using var document = JsonDocument.Parse(json); var root = document.RootElement;
             if (root.GetProperty("Stage").GetString() != "complete" || root.GetProperty("HResult").GetString() != "0x0")
                 throw new ArchiveReviewException("Identificação nativa incompleta.");
